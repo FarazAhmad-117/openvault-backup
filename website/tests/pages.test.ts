@@ -7,7 +7,7 @@ const distDir = join(process.cwd(), 'dist');
 function walk(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const p = join(dir, name);
-    return statSync(p).isDirectory() ? walk(p) : p.endsWith('.html') ? [p] : [];
+    return statSync(p).isDirectory() ? walk(p) : p.endsWith('.html') && !/[\\/]google[0-9a-f]+\.html$/.test(p) ? [p] : [];
   });
 }
 

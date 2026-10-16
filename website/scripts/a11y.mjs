@@ -18,7 +18,7 @@ if (!existsSync(dist)) {
 
 const walk = (d) => readdirSync(d).flatMap((n) => {
   const p = join(d, n);
-  return statSync(p).isDirectory() ? walk(p) : p.endsWith('.html') ? [p] : [];
+  return statSync(p).isDirectory() ? walk(p) : p.endsWith('.html') && !/[\\/]google[0-9a-f]+\.html$/.test(p) ? [p] : [];
 });
 const routes = walk(dist)
   .map((f) => '/' + relative(dist, f).split(sep).join('/'))

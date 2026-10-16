@@ -15,7 +15,7 @@ const fontItalic = readFileSync(join(root, 'node_modules/@fontsource/instrument-
 
 const walk = (d) => readdirSync(d).flatMap((n) => {
   const p = join(d, n);
-  return statSync(p).isDirectory() ? walk(p) : p.endsWith('.html') ? [p] : [];
+  return statSync(p).isDirectory() ? walk(p) : p.endsWith('.html') && !/[\\/]google[0-9a-f]+\.html$/.test(p) ? [p] : [];
 });
 const unescape = (s) => s.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
 const meta = (html, prop) => {

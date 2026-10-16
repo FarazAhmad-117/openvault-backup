@@ -11,5 +11,7 @@ export function walkAll(dir: string = distDir): string[] {
   });
 }
 
-export const htmlFiles = () => (hasDist ? walkAll().filter((f) => f.endsWith('.html')) : []);
+// Google Search Console verification files (googleXXXX.html) are not pages.
+export const isVerificationFile = (f: string) => /[\\/]google[0-9a-f]+\.html$/.test(f);
+export const htmlFiles = () => (hasDist ? walkAll().filter((f) => f.endsWith('.html') && !isVerificationFile(f)) : []);
 export const route = (file: string) => '/' + relative(distDir, file).split(sep).join('/');
