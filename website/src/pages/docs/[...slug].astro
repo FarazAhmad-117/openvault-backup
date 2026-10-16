@@ -1,0 +1,40 @@
+---
+import { getCollection, render } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import OutlineNotice from '../../components/OutlineNotice.astro';
+import GuideProse from '../../components/GuideProse.astro';
+import { siteUrl } from '../../config/site';
+import { statusOf } from '../../lib/registry';
+import { breadcrumbs } from '../../lib/jsonld';
+import { guideHref, guideTitle, guideDescription, isDocsGuide } from '../../lib/guides';
+
+// Only guides whose canonical home is /docs/<slug>/ are generated here.
+export async function getStaticPaths() {
+  const entries = (await getCollection('guides')).filter((e) => isDocsGuide(e.id));
+  return entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+const title = guideTitle(entry.body ?? '');
+const description = guideDescription(entry.body ?? '');
+const path = guideHref(entry.id);
+const features: Record<string, string> = { dropbox: 'destination-dropbox-onedrive-sftp', onedrive: 'destination-dropbox-onedrive-sftp' };
+const status = features[entry.id] ? statusOf(features[entry.id]) : undefined;
+const trail = [{ name: 'Home', path: '/' }, { name: 'Docs', path: '/docs/' }, { name: title, path }];
+---
+
+<Base title={`${title} guide (outline)`} description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb={title} path={path} title={title} trail={[{ name: 'Docs', href: '/docs/' }]}>
+    <p>An outline of the planned setup. It will become a full guide with screenshots when this part of the plugin is built.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <OutlineNotice status={status} unavailable="this part of the plugin is not available yet" />
+      <GuideProse><Content /></GuideProse>
+      <p><a class="link" href="/docs/">Back to all guides</a></p>
+    </div>
+  </section>
+</Base>

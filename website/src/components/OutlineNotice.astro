@@ -1,0 +1,22 @@
+---
+import StatusBadge from './StatusBadge.astro';
+import type { Status } from '../lib/status';
+
+interface Props { status?: Status; unavailable?: string }
+const { status, unavailable = "the plugin's connect screen is not available yet" } = Astro.props;
+---
+
+<aside class="outline-notice" role="note" aria-labelledby="outline-notice-title">
+  <div class="head">
+    <h2 id="outline-notice-title">Outline / preview</h2>
+    {status && <StatusBadge status={status} />}
+  </div>
+  <p class="muted">This describes the planned setup flow; {unavailable}. Nothing here can be followed end to end today, and the steps may change as the feature is built.</p>
+</aside>
+
+<style>
+  .outline-notice { border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: var(--space-5); background: var(--surface); }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); margin-bottom: var(--space-2); }
+  h2 { font-size: var(--step-1); line-height: 1.2; }
+  p { max-width: 62ch; }
+</style>

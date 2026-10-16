@@ -1,0 +1,17 @@
+---
+import { PLUGIN_VERSION, downloadUrl } from '../config/site';
+
+interface Props { variant?: 'primary' | 'secondary' }
+const { variant = 'primary' } = Astro.props;
+const preAlpha = PLUGIN_VERSION.startsWith('0.');
+---
+
+<div class="dl">
+  <a class={`btn btn--${variant}`} href={downloadUrl()} rel="noopener">Download for WordPress (.zip)</a>
+  {preAlpha && <p class="note muted small">Pre-alpha {PLUGIN_VERSION} (can't back up sites yet)</p>}
+</div>
+
+<style>
+  .dl { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
+  .note { margin: 0; }
+</style>

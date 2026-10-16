@@ -1,0 +1,28 @@
+---
+import { label, type Status } from '../lib/status';
+
+interface Props { status: Status }
+const { status } = Astro.props;
+---
+
+<span class={`badge badge--${status}`}>
+  <span class="dot" aria-hidden="true"></span>
+  <span>{label(status)}</span>
+</span>
+
+<style>
+  .badge {
+    --c: var(--muted);
+    display: inline-flex; align-items: center; gap: 0.5em;
+    padding: 0.2em 0.75em 0.2em 0.6em;
+    border: 1px solid color-mix(in srgb, var(--c) 40%, var(--line));
+    background: color-mix(in srgb, var(--c) 9%, var(--surface));
+    border-radius: 999px;
+    font-size: var(--step--1); font-weight: 600; line-height: 1.5;
+    color: var(--text); white-space: nowrap;
+  }
+  .dot { width: 0.5em; height: 0.5em; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 22%, transparent); }
+  .badge--available { --c: var(--ok); }
+  .badge--in-progress { --c: var(--warn); }
+  .badge--planned { --c: var(--soft); }
+</style>

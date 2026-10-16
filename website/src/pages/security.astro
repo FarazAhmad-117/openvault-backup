@@ -1,0 +1,128 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import { repoUrl, siteUrl } from '../config/site';
+import { statusOf } from '../lib/registry';
+import { breadcrumbs } from '../lib/jsonld';
+
+const description = 'How OpenVault Backup is designed to keep your data safe: your own credentials, drive.file scope, encrypted secrets, authenticated downloads and safe restores.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'Security', path: '/security/' }];
+
+interface Commitment { title: string; text: string; badges?: readonly (readonly [string, string])[] }
+
+const commitments: Commitment[] = [
+  {
+    title: 'Your credentials, no relay servers',
+    text: 'You connect your own Google OAuth app or your own S3 keys. Tokens and data travel only between your site and your storage. There is no shared OAuth app and no server of ours in the middle. The OAuth state is validated and the redirect URI is fixed to your admin URL.',
+    badges: [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3']],
+  },
+  {
+    title: 'Google Drive: drive.file scope only',
+    text: 'The plugin asks for the narrowest Drive permission, which covers only files and folders it creates. It is not designed to read the rest of your Drive.',
+    badges: [['Google Drive', 'destination-gdrive']],
+  },
+  {
+    title: 'Credentials encrypted before storage',
+    text: 'Saved credentials are encrypted at rest, with a key derived from your WordPress salts or an OVB_ENCRYPTION_KEY constant you set in wp-config. Secrets are never shown again in the interface; you only see a masked value and a replace button.',
+  },
+  {
+    title: 'Downloads only through an authenticated controller',
+    text: 'Backups are streamed to you by a download controller that checks who you are. There are no public download URLs.',
+  },
+  {
+    title: 'Capability and nonce on every action',
+    text: 'Every page, AJAX action and REST route requires the manage_options capability (network admin on multisite), and every form and REST call carries a nonce.',
+  },
+  {
+    title: 'A safety snapshot before every restore',
+    text: 'Before overwriting anything, a restore takes a snapshot of the current database and affected folders, so you can undo it. The plugin also protects itself: its own tables, settings and credentials are preserved across a database import, and its own folder is never overwritten.',
+    badges: [['Restore', 'restore-in-place']],
+  },
+  {
+    title: 'Secrets stay out of the logs',
+    text: 'Logs must never contain tokens or passwords. The logger already redacts secrets in the pre-alpha foundation, and it has unit tests.',
+  },
+  {
+    title: 'Archives are checked on the way in',
+    text: 'An uploaded archive must be a genuine OpenVault archive, within size limits, and any path that tries to climb out with ../ is rejected during extraction.',
+    badges: [['Restore from upload', 'restore-upload']],
+  },
+  {
+    title: 'Local backups are hidden',
+    text: 'The local folder gets a random name, a deny rule and an index file, and sits outside the web root when possible. Nginx ignores .htaccess, so the plugin is designed to warn Nginx users.',
+    badges: [['Local storage', 'destination-local']],
+  },
+  {
+    title: 'Nothing leaves except where you point it',
+    text: 'The plugin only contacts the destinations you configure. It has no analytics and does not phone home.',
+  },
+];
+---
+
+<Base title="Security" description={description} path="/security/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Security" path="/security/" title="How it is designed to keep your data yours">
+    <p>These are the design commitments the plugin is being built to meet. They are rules the code must follow, not a claim that the code has passed an audit.</p>
+    <p>Where a commitment maps to a feature, you see that feature's real status. Commitments that cut across features carry a Design rule label instead.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <h2 class="sec-title">How it is designed</h2>
+      <ol role="list" class="rules">
+        {commitments.map((c, i) => (
+          <li class="rule">
+            <span class="num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+            <div class="r-body">
+              <h3>{c.title}</h3>
+              <p class="muted">{c.text}</p>
+            </div>
+            <ul role="list" class="r-tags">
+              {c.badges ? (
+                c.badges.map(([name, id]) => (
+                  <li><span class="small muted">{name}</span> <StatusBadge status={statusOf(id)} /></li>
+                ))
+              ) : (
+                <li><span class="design-rule">Design rule</span></li>
+              )}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container two">
+      <div class="stack">
+        <h2 class="sec-title">Report a vulnerability</h2>
+        <p class="lede">Found something? Please tell us privately first, so it can be fixed before it is public.</p>
+      </div>
+      <div class="stack">
+        <p class="muted">Use the repository's private security advisory form. Include what you found, how to reproduce it and which version you tested. Please do not open a public issue for a vulnerability.</p>
+        <a class="btn btn--primary" href={`${repoUrl()}/security/advisories/new`} rel="noopener">Report a vulnerability</a>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .rules { padding: 0; display: grid; }
+  .rule { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
+  .rule:last-child { border-bottom: 1px solid var(--line-strong); }
+  .num { font-family: var(--font-display); font-size: var(--step-3); line-height: 1; color: var(--accent); }
+  .r-body { display: grid; gap: var(--space-3); }
+  .r-body p { max-width: 56ch; }
+  .r-body h3 { font-size: var(--step-2); }
+  .r-tags { padding: 0; display: grid; gap: var(--space-2); align-content: start; justify-items: start; }
+  .r-tags li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .design-rule { display: inline-flex; padding: 0.2em 0.75em; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: var(--step--1); font-weight: 600; line-height: 1.5; color: var(--muted); white-space: nowrap; }
+  .two { display: grid; gap: var(--space-7); }
+  .two .btn { justify-self: start; }
+  @media (min-width: 48rem) {
+    .rule { grid-template-columns: 5rem minmax(0, 1fr) 14rem; align-items: start; }
+  }
+  @media (min-width: 60rem) {
+    .two { grid-template-columns: 0.9fr 1.1fr; }
+  }
+</style>

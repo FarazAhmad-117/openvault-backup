@@ -1,0 +1,25 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import FeatureGrid from '../components/FeatureGrid.astro';
+import { SITE_NAME, siteUrl } from '../config/site';
+import { breadcrumbs } from '../lib/jsonld';
+
+const description = 'Every OpenVault Backup feature, grouped by release phase, each with its real status. Nothing is marked available until it ships.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'Features', path: '/features/' }];
+---
+
+<Base title="Features" description={description} path="/features/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Features" path="/features/" title="What it is being built to do">
+    <p>{SITE_NAME} is free and open source, with every feature available to everyone. This is the full list, grouped by release phase.</p>
+    <p>Each item carries its real status. Nothing is marked Available until it works in a released build, and today that is nothing.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <h2 class="visually-hidden">Feature list by phase</h2>
+      <FeatureGrid headingLevel="h3" />
+      <p class="muted small">Looking for timing? The <a class="link" href="/roadmap/">roadmap</a> shows the release milestones.</p>
+    </div>
+  </section>
+</Base>

@@ -1,0 +1,103 @@
+---
+// Decorative vault door. Static by default; the dial, handle and locking bolts
+// are driven by page scroll only where CSS scroll-driven animations exist and
+// the visitor has not asked for reduced motion. No JavaScript.
+const C = 200;
+const polar = (r: number, deg: number) => {
+  const a = ((deg - 90) * Math.PI) / 180;
+  return [C + r * Math.cos(a), C + r * Math.sin(a)] as const;
+};
+const ticks = Array.from({ length: 60 }, (_, i) => {
+  const major = i % 5 === 0;
+  const [x1, y1] = polar(major ? 98 : 103, i * 6);
+  const [x2, y2] = polar(112, i * 6);
+  return { major, d: `M${x1.toFixed(2)} ${y1.toFixed(2)}L${x2.toFixed(2)} ${y2.toFixed(2)}` };
+});
+const minor = ticks.filter((t) => !t.major).map((t) => t.d).join('');
+const major = ticks.filter((t) => t.major).map((t) => t.d).join('');
+const bolts = Array.from({ length: 8 }, (_, i) => i * 45);
+const heads = Array.from({ length: 16 }, (_, i) => polar(172, i * 22.5 + 11.25));
+const spokes = [0, 120, 240];
+---
+
+<div class="vault">
+  <svg viewBox="0 0 400 400" role="img" aria-label="Illustration of a vault door with a combination dial and locking bolts" focusable="false">
+    <circle class="frame" cx="200" cy="200" r="192" />
+    <circle class="frame-inner" cx="200" cy="200" r="158" />
+    {heads.map(([x, y]) => <circle class="head" cx={x.toFixed(2)} cy={y.toFixed(2)} r="3.2" />)}
+
+    {bolts.map((a) => (
+      <g transform={`rotate(${a} 200 200)`}>
+        <rect class="bolt" x="190" y="22" width="20" height="44" rx="3" />
+      </g>
+    ))}
+
+    <circle class="face" cx="200" cy="200" r="150" />
+    <circle class="face-line" cx="200" cy="200" r="140" />
+    <circle class="glow" cx="200" cy="200" r="86" />
+
+    <g class="dial">
+      <circle class="ring" cx="200" cy="200" r="116" />
+      <path class="tick" d={minor} />
+      <path class="tick tick--major" d={major} />
+      <circle class="ring" cx="200" cy="200" r="92" />
+    </g>
+    <path class="pointer" d="M200 76l7 -13h-14z" />
+
+    <g class="handle">
+      <circle class="hub-ring" cx="200" cy="200" r="64" />
+      {spokes.map((a) => (
+        <g transform={`rotate(${a} 200 200)`}>
+          <path class="spoke" d="M200 200V142" />
+          <circle class="knob" cx="200" cy="134" r="9" />
+        </g>
+      ))}
+      <circle class="hub" cx="200" cy="200" r="20" />
+      <circle class="hub-dot" cx="200" cy="200" r="5" />
+    </g>
+  </svg>
+</div>
+
+<style>
+  .vault { width: 100%; max-width: 30rem; aspect-ratio: 1 / 1; margin-inline: auto; }
+  svg { width: 100%; height: 100%; overflow: visible; }
+  .frame { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.5; }
+  .frame-inner { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+  .head { fill: var(--line-strong); }
+  .bolt { fill: var(--surface-2); stroke: var(--accent); stroke-width: 1.5; }
+  .face { fill: var(--surface-2); stroke: var(--accent); stroke-width: 2; }
+  .face-line { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+  .glow { fill: color-mix(in srgb, var(--accent) 22%, transparent); opacity: 0.35; }
+  .ring { fill: none; stroke: var(--accent); stroke-width: 1.25; }
+  .tick { fill: none; stroke: var(--muted); stroke-width: 1.25; stroke-linecap: round; }
+  .tick--major { stroke: var(--accent); stroke-width: 2.25; }
+  .pointer { fill: var(--accent); }
+  .hub-ring { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1; }
+  .spoke { stroke: var(--accent); stroke-width: 6; stroke-linecap: round; fill: none; }
+  .knob { fill: var(--surface-2); stroke: var(--accent); stroke-width: 2.5; }
+  .hub { fill: var(--accent); }
+  .hub-dot { fill: var(--accent-ink); }
+
+  .dial, .handle { transform-box: view-box; transform-origin: 50% 50%; }
+
+  @keyframes dial-turn { to { transform: rotate(210deg); } }
+  @keyframes handle-turn { to { transform: rotate(-120deg); } }
+  @keyframes bolt-retract { to { transform: translateY(40px); } }
+  @keyframes glow-up { to { opacity: 1; } }
+
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .dial, .handle, .bolt, .glow {
+        animation-timing-function: linear;
+        animation-fill-mode: both;
+        animation-duration: 1ms; /* required by some engines; the timeline drives progress */
+        animation-timeline: scroll(root);
+        animation-range: 0 90vh;
+      }
+      .dial { animation-name: dial-turn; }
+      .handle { animation-name: handle-turn; animation-range: 20vh 90vh; }
+      .bolt { animation-name: bolt-retract; animation-range: 35vh 90vh; }
+      .glow { animation-name: glow-up; animation-range: 40vh 90vh; }
+    }
+  }
+</style>

@@ -1,0 +1,222 @@
+---
+import Base from '../layouts/Base.astro';
+import DownloadButton from '../components/DownloadButton.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import VaultHero from '../components/VaultHero.astro';
+import FeatureGrid from '../components/FeatureGrid.astro';
+import { TAGLINE, repoUrl } from '../config/site';
+import { featuredFaqs } from '../data/faq';
+import { statusOf } from '../lib/registry';
+import { softwareApplication, faqPage } from '../lib/jsonld';
+
+
+const description = 'Free, open-source WordPress backup plugin that backs up to your own Google Drive or S3-compatible storage. Pre-alpha.';
+
+const principles = [
+  {
+    n: '01',
+    title: 'Your credentials',
+    text: 'You will connect your own Google OAuth app or your own S3 keys. Tokens and data travel only between your site and your storage. There are no relay servers in the design.',
+    badges: [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3']],
+  },
+  {
+    n: '02',
+    title: 'Built for cheap hosting',
+    text: 'Everything long-running is designed to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory.',
+    badges: [['Backups', 'backup-manual']],
+  },
+  {
+    n: '03',
+    title: 'Restore you can trust',
+    text: 'Archives are built to carry checksums. A restore is designed to take a safety snapshot first, and the plugin is built to protect itself while the restore runs.',
+    badges: [['Restore', 'restore-in-place']],
+  },
+] as const;
+
+const destinations = [
+  { name: 'Google Drive', href: '/google-drive/', id: 'destination-gdrive' },
+  { name: 'S3-compatible', href: '/s3-r2/', id: 'destination-s3' },
+  { name: 'Cloudflare R2', href: '/s3-r2/cloudflare-r2/', id: 'destination-s3' },
+  { name: 'Backblaze B2', href: '/s3-r2/backblaze-b2/', id: 'destination-s3' },
+  { name: 'Wasabi', href: '/s3-r2/wasabi/', id: 'destination-s3' },
+  { name: 'AWS S3', href: '/s3-r2/aws-s3/', id: 'destination-s3' },
+  { name: 'DigitalOcean Spaces', href: '/s3-r2/digitalocean-spaces/', id: 'destination-s3' },
+];
+
+const steps = [
+  { title: 'Connect your storage', text: 'Add your own Google Drive app or S3-compatible keys. You stay in control of the credentials.', id: 'destination-s3' },
+  { title: 'Choose what and when', text: 'Pick database, plugins, themes and uploads, then run it by hand or on a schedule.', id: 'backup-manual' },
+  { title: 'Restore with a safety net', text: 'Restore from history, with a safety snapshot taken before anything is overwritten.', id: 'restore-in-place' },
+];
+
+const faq = featuredFaqs;
+---
+
+<Base description={description} path="/" jsonLd={[softwareApplication(), faqPage(faq)]}>
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-copy stack-lg">
+        <h1>WordPress backups, in a vault only you hold the key to.</h1>
+        <p class="lede">{TAGLINE}</p>
+        <div class="cluster">
+          <DownloadButton />
+          <a class="btn btn--secondary" href={repoUrl()} rel="noopener">Star on GitHub</a>
+        </div>
+      </div>
+      <div class="hero-art"><VaultHero /></div>
+    </div>
+  </section>
+
+  <aside class="strip" aria-label="Project status">
+    <div class="container strip-in">
+      <StatusBadge status="in-progress" />
+      <p>Pre-alpha: the foundation is built; backups are in progress.</p>
+      <a class="link" href="/roadmap/">See the roadmap</a>
+    </div>
+  </aside>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="sec-title">Three promises, by design</h2>
+      <ol role="list" class="principles">
+        {principles.map((p) => (
+          <li class="principle">
+            <span class="num" aria-hidden="true">{p.n}</span>
+            <div class="p-body">
+              <h3>{p.title}</h3>
+              <p class="muted">{p.text}</p>
+            </div>
+            <ul role="list" class="p-badges">
+              {p.badges.map(([name, id]) => (
+                <li><span class="small muted">{name}</span> <StatusBadge status={statusOf(id)} /></li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container stack-lg">
+      <div class="stack">
+        <h2 class="sec-title">What it will do</h2>
+        <p class="lede">Every item below carries its real status. Nothing is marked available until it ships in a release.</p>
+      </div>
+      <FeatureGrid />
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <h2 class="sec-title">Planned destinations</h2>
+      <ul role="list" class="dests">
+        {destinations.map((d) => (
+          <li>
+            <a class="dest" href={d.href}>
+              <span class="dest-name">{d.name}</span>
+              <StatusBadge status={statusOf(d.id)} />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container">
+      <h2 class="sec-title">How it works</h2>
+      <p class="muted flag">This is the flow the plugin is being built to follow. Each step shows where it stands today.</p>
+      <ol role="list" class="steps">
+        {steps.map((s, i) => (
+          <li class="step">
+            <span class="step-n" aria-hidden="true">{i + 1}</span>
+            <h3>{s.title}</h3>
+            <p class="muted">{s.text}</p>
+            <StatusBadge status={statusOf(s.id)} />
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container faq-grid">
+      <div class="stack">
+        <h2 class="sec-title">Straight answers</h2>
+        <a class="link" href="/faq/">Read the full FAQ</a>
+      </div>
+      <div class="qa">
+        {faq.map((f) => (
+          <div class="qa-item">
+            <h3>{f.q}</h3>
+            <p class="muted">{f.a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section cta">
+    <div class="container stack-lg">
+      <h2 class="sec-title">Follow the build, or try the pre-alpha.</h2>
+      <p class="lede">The plugin cannot back up or restore sites yet. Download it to follow along, test the foundation, or contribute.</p>
+      <div class="cluster">
+        <DownloadButton />
+        <a class="btn btn--secondary" href={repoUrl()} rel="noopener">Star on GitHub</a>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .hero { padding-block: var(--space-8) var(--space-7); background:
+    radial-gradient(60rem 30rem at 85% 0%, rgb(224 164 88 / 0.07), transparent 70%); }
+  .hero-grid { display: grid; gap: var(--space-7); align-items: center; }
+  .hero-copy h1 { max-width: 16ch; }
+  .hero-art { min-width: 0; }
+  .hero-copy .cluster { align-items: flex-start; }
+  .strip { background: var(--surface); border-block: 1px solid var(--line); }
+  .strip-in { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding-block: var(--space-4); }
+  .strip-in p { max-width: none; font-weight: 500; }
+  .strip-in .link { margin-left: auto; }
+  .sec-title { font-size: var(--step-4); max-width: 18ch; }
+
+  .principles { padding: 0; margin-top: var(--space-7); display: grid; }
+  .principle { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
+  .principle:last-child { border-bottom: 1px solid var(--line-strong); }
+  .num { font-family: var(--font-display); font-size: var(--step-4); line-height: 1; color: var(--accent); }
+  .p-body { display: grid; gap: var(--space-3); }
+  .p-body p { max-width: 46ch; }
+  .p-badges { padding: 0; display: grid; gap: var(--space-2); align-content: start; justify-items: start; }
+  .p-badges li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+  .dests { padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); border-top: 1px solid var(--line-strong); border-left: 1px solid var(--line); }
+  .dest { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); padding: var(--space-5); text-decoration: none; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); height: 100%; }
+  .dest:hover { background: var(--surface); }
+  .dest-name { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.1; }
+
+  .flag { margin-top: var(--space-4); }
+  .steps { padding: 0; margin-top: var(--space-7); display: grid; gap: var(--space-6); }
+  .step { display: grid; gap: var(--space-3); justify-items: start; border-top: 1px solid var(--accent); padding-top: var(--space-5); }
+  .step-n { font-family: var(--font-display); font-size: var(--step-4); line-height: 1; color: var(--accent); }
+
+  .faq-grid { display: grid; gap: var(--space-7); }
+  .qa { display: grid; }
+  .qa-item { padding-block: var(--space-5); border-top: 1px solid var(--line-strong); display: grid; gap: var(--space-2); }
+  .qa-item:last-child { border-bottom: 1px solid var(--line-strong); }
+
+  .cta { border-top: 1px solid var(--line); }
+  .cta .sec-title { max-width: 20ch; }
+
+  @media (min-width: 48rem) {
+    .principle { grid-template-columns: 6rem minmax(0, 1fr) 14rem; align-items: start; }
+    .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-6); }
+    .step:nth-child(2) { margin-top: var(--space-6); }
+    .step:nth-child(3) { margin-top: var(--space-8); }
+  }
+  @media (min-width: 60rem) {
+    .hero-grid { grid-template-columns: 1.15fr 0.85fr; }
+    .faq-grid { grid-template-columns: 0.8fr 1.2fr; }
+  }
+</style>

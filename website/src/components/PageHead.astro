@@ -1,0 +1,29 @@
+---
+interface Props { crumb: string; path: string; title: string; trail?: { name: string; href: string }[] }
+const { crumb, title, trail = [] } = Astro.props;
+---
+
+<section class="page-head">
+  <div class="container stack-lg">
+    <nav aria-label="Breadcrumb" class="crumbs small">
+      <a href="/">Home</a>
+      <span aria-hidden="true">/</span>
+      {trail.map((t) => (<><a href={t.href}>{t.name}</a><span aria-hidden="true">/</span></>))}
+      <span aria-current="page">{crumb}</span>
+    </nav>
+    <h1>{title}</h1>
+    <div class="lede-wrap"><slot /></div>
+  </div>
+</section>
+
+<style>
+  .page-head { padding-block: var(--space-8) var(--space-7); border-bottom: 1px solid var(--line);
+    background: radial-gradient(50rem 24rem at 90% 0%, rgb(224 164 88 / 0.06), transparent 70%); }
+  h1 { font-size: var(--step-4); max-width: 20ch; }
+  .crumbs { display: flex; flex-wrap: wrap; gap: var(--space-2); color: var(--muted); }
+  .crumbs a { color: var(--muted); }
+  .crumbs a:hover { color: var(--accent); }
+  .crumbs [aria-current] { color: var(--text); }
+  .lede-wrap :global(p) { font-size: var(--step-1); color: var(--muted); line-height: 1.55; max-width: 58ch; }
+  .lede-wrap :global(p + p) { margin-top: var(--space-3); }
+</style>

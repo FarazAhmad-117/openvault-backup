@@ -1,0 +1,25 @@
+{
+  "ci": {
+    "collect": {
+      "staticDistDir": "./dist",
+      "url": [
+        "/",
+        "/download/",
+        "/google-drive/",
+        "/s3-r2/cloudflare-r2/",
+        "/compare/updraftplus/"
+      ],
+      "numberOfRuns": 1,
+      "settings": { "chromeFlags": "--no-sandbox --headless=new" }
+    },
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.95 }],
+        "categories:accessibility": ["error", { "minScore": 0.95 }],
+        "categories:best-practices": ["error", { "minScore": 0.95 }],
+        "categories:seo": ["error", { "minScore": 0.95 }]
+      }
+    },
+    "upload": { "target": "filesystem", "outputDir": ".lighthouseci" }
+  }
+}

@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint + static analysis
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+          tools: composer
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: composer run lint
+      - run: composer run analyse
+
+  unit:
+    name: Unit tests (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ '7.4', '8.0', '8.1', '8.2', '8.3', '8.4' ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: composer run test
+
+  package:
+    name: Build installable zip
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: sh bin/build-zip.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openvault-backup-zip
+          path: dist/openvault-backup-*.zip
+          if-no-files-found: error
+
+  environments:
+    name: Docker env (${{ matrix.profile }})
+    needs: [ quality, unit ]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [ min-supported, php80, php81, php82, php83, php84, multisite, restricted, lowmem ]
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tests/matrix/run.sh ${{ matrix.profile }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: matrix-logs-${{ matrix.profile }}
+          path: dist/matrix-logs/
+          if-no-files-found: ignore
+
+  informational:
+    name: Docker env, older WordPress (informational)
+    needs: [ quality, unit ]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash tests/matrix/run.sh --jobs 2 wp68-info wp64-info
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: matrix-logs-informational
+          path: dist/matrix-logs/
+          if-no-files-found: ignore

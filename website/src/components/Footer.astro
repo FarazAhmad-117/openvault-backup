@@ -1,0 +1,67 @@
+---
+import { SITE_NAME, PLUGIN_VERSION, repoUrl } from '../config/site';
+
+const preAlpha = PLUGIN_VERSION.startsWith('0.');
+const columns = [
+  { title: 'Product', links: [
+    { text: 'Features', href: '/features/' },
+    { text: 'How it works', href: '/how-it-works/' },
+    { text: 'Roadmap', href: '/roadmap/' },
+    { text: 'Changelog', href: '/changelog/' },
+  ] },
+  { title: 'Learn', links: [
+    { text: 'Google Drive', href: '/google-drive/' },
+    { text: 'S3-compatible', href: '/s3-r2/' },
+    { text: 'Compare', href: '/compare/' },
+    { text: 'Docs', href: '/docs/' },
+    { text: 'FAQ', href: '/faq/' },
+  ] },
+  { title: 'Project', links: [
+    { text: 'Download', href: '/download/' },
+    { text: 'Security', href: '/security/' },
+    { text: 'Open source', href: '/open-source/' },
+    { text: 'GitHub', href: repoUrl() },
+  ] },
+];
+---
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="cols">
+      <div class="about">
+        <p class="name">{SITE_NAME}</p>
+        {preAlpha && <p class="muted small honest">OpenVault Backup is pre-alpha software. It cannot back up or restore sites yet.</p>}
+      </div>
+      {columns.map((c) => (
+        <nav aria-label={c.title}>
+          <h2 class="col-title">{c.title}</h2>
+          <ul role="list">
+            {c.links.map((l) => <li><a href={l.href}>{l.text}</a></li>)}
+          </ul>
+        </nav>
+      ))}
+    </div>
+    <div class="legal small muted">
+      <p>GPLv2 or later</p>
+      <p>Not affiliated with WordPress or the WordPress Foundation.</p>
+    </div>
+  </div>
+</footer>
+
+<style>
+  .site-footer { margin-top: var(--space-9); background: var(--surface); border-top: 1px solid var(--line); padding-block: var(--space-8) var(--space-6); }
+  .cols { display: grid; gap: var(--space-7) var(--space-6); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .about { grid-column: 1 / -1; }
+  .name { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.1; margin-bottom: var(--space-3); }
+  .honest { max-width: 34ch; }
+  .col-title { font-family: var(--font-body); font-size: var(--step--1); font-weight: 600; letter-spacing: 0.02em; color: var(--muted); margin-bottom: var(--space-3); }
+  ul { padding: 0; display: grid; gap: var(--space-2); }
+  nav a { text-decoration: none; font-size: var(--step--1); display: inline-block; padding-block: 0.2rem; }
+  nav a:hover { color: var(--accent); }
+  .legal { margin-top: var(--space-8); padding-top: var(--space-5); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); }
+  .legal p { max-width: none; }
+  @media (min-width: 48rem) {
+    .cols { grid-template-columns: 1.4fr repeat(3, 1fr); }
+    .about { grid-column: auto; }
+  }
+</style>

@@ -1,0 +1,155 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import { siteUrl } from '../config/site';
+import { statusOf } from '../lib/registry';
+import { breadcrumbs } from '../lib/jsonld';
+
+const description = 'How OpenVault Backup is designed to work: connect storage, choose contents, resumable chunked backups, manifest.json, retention and safe restore.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'How it works', path: '/how-it-works/' }];
+
+const flow = [
+  {
+    title: 'Connect your storage',
+    text: 'Add your own Google Drive OAuth app or your own S3-compatible keys, or choose a protected folder on your server. The plugin talks to your storage directly, with no relay in between.',
+    badges: [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3'], ['Local', 'destination-local']],
+  },
+  {
+    title: 'Choose what and when',
+    text: 'Pick the database, plugins, themes, uploads and more, set exclusions, then back up by hand or on schedules powered by Action Scheduler.',
+    badges: [['Manual', 'backup-manual'], ['Scheduled', 'backup-scheduled']],
+  },
+  {
+    title: 'Run a resumable, chunked backup',
+    text: 'The job works in small batches inside a time and memory budget, saves its place, and picks up again in the next run. No step needs a whole table or file list in memory.',
+    badges: [['Backups', 'backup-manual']],
+  },
+  {
+    title: 'Upload, with a manifest',
+    text: 'Archives are uploaded in parts with retries. A manifest.json is written next to every backup so a fresh install can rediscover it.',
+    badges: [['Backups', 'backup-manual']],
+  },
+  {
+    title: 'Apply retention',
+    text: 'Keep the last N backups or the last X days, set per destination, with a lock to keep a backup forever.',
+    badges: [['Backups', 'backup-manual']],
+  },
+  {
+    title: 'Restore with a safety snapshot',
+    text: 'Restore from history in full, database-only or files-only. A safety snapshot of the current state is taken first, so the restore can be undone.',
+    badges: [['Restore', 'restore-in-place']],
+  },
+] as const;
+
+const engine = [
+  ['Preflight', 'Checks disk space, the temp directory and the destinations.'],
+  ['Database export', 'Pure PHP by default, in batches; remembers the table and row position.'],
+  ['File scan', 'Walks the directories and writes the list to a temp file; remembers its place.'],
+  ['Archive', 'Builds the archive in parts; remembers the file index and part number.'],
+  ['Upload', 'Sends each part to the destination, retrying up to three times per chunk.'],
+  ['Retention', 'Removes backups that fall outside your rules.'],
+  ['Cleanup', 'Deletes temporary files.'],
+];
+
+const restore = [
+  'Download the parts to a temp directory and verify their SHA-256 checksums.',
+  'Decrypt if needed (a later phase).',
+  'Show what will be restored, and let you choose full, database-only or files-only.',
+  'Take a safety snapshot of the current database and affected folders.',
+  'Switch on maintenance mode, with a 30 minute failsafe that expires on its own.',
+  'Restore the database in chunks, preferring a temporary table prefix that is swapped in.',
+  'Restore files, skipping the plugin\'s own folder.',
+  'Switch maintenance off, flush caches and rewrite rules, and show a result page with an Undo restore option that uses the safety snapshot.',
+];
+---
+
+<Base title="How it works" description={description} path="/how-it-works/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="How it works" path="/how-it-works/" title="From your site to your storage, and back">
+    <p>This is the flow OpenVault Backup is being built to follow. Each step shows where it stands today, from the same registry as the feature list.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <h2 class="sec-title">The whole loop</h2>
+      <ol role="list" class="flow">
+        {flow.map((s, i) => (
+          <li class="flow-step">
+            <span class="num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+            <div class="f-body">
+              <h3>{s.title}</h3>
+              <p class="muted">{s.text}</p>
+            </div>
+            <ul role="list" class="f-badges">
+              {s.badges.map(([name, id]) => (
+                <li><span class="small muted">{name}</span> <StatusBadge status={statusOf(id)} /></li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container two">
+      <div class="stack">
+        <h2 class="sec-title">Inside a backup</h2>
+        <p class="lede">Shared hosts often stop PHP after 30 to 60 seconds and cap memory. So a backup is a sequence of small steps, not one long request.</p>
+        <p class="muted">Each run gets a time and memory budget. When it is used up, the step saves a cursor and the next run continues from there. A lock stops two runs overlapping, and a stalled job is detected and resumed or marked failed.</p>
+      </div>
+      <ol role="list" class="engine">
+        {engine.map(([name, text]) => (
+          <li>
+            <h3>{name}</h3>
+            <p class="muted">{text}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container two">
+      <div class="stack">
+        <h2 class="sec-title">Inside a restore</h2>
+        <p class="lede">A restore is a resumable job too, and it is built to protect both your site and the plugin itself.</p>
+        <p class="muted">Before the database import, the plugin's own tables, settings and destination credentials are exported and re-applied afterwards. Its own folder is never overwritten, and the job record survives the database swap. Expect your admin session to end, so the result page handles signing in again.</p>
+        <p class="small muted">Restore from an uploaded archive, and rediscovering backups on a fresh install via manifest.json, are planned for a later phase. See the <a class="link" href="/roadmap/">roadmap</a>.</p>
+      </div>
+      <ol class="restore">
+        {restore.map((r) => <li>{r}</li>)}
+      </ol>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .flow { padding: 0; display: grid; }
+  .flow-step { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
+  .flow-step:last-child { border-bottom: 1px solid var(--line-strong); }
+  .num { font-family: var(--font-display); font-size: var(--step-4); line-height: 1; color: var(--accent); }
+  .f-body { display: grid; gap: var(--space-3); }
+  .f-body p { max-width: 50ch; }
+  .f-badges { padding: 0; display: grid; gap: var(--space-2); align-content: start; justify-items: start; }
+  .f-badges li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+  .two { display: grid; gap: var(--space-7); }
+  .engine { padding: 0; counter-reset: eng; }
+  .engine li { counter-increment: eng; display: grid; gap: var(--space-1); padding-block: var(--space-4); border-top: 1px solid var(--line-strong); }
+  .engine li:last-child { border-bottom: 1px solid var(--line-strong); }
+  .engine li h3 { font-size: var(--step-1); }
+  .engine li h3::before { content: counter(eng, decimal-leading-zero) '  '; color: var(--accent); font-family: var(--font-mono); font-size: 0.7em; margin-right: 0.6em; }
+
+  .restore { padding: 0; list-style: none; counter-reset: rs; }
+  .restore li { counter-increment: rs; position: relative; padding: var(--space-4) 0 var(--space-4) 3rem; border-top: 1px solid var(--line-strong); max-width: 58ch; }
+  .restore li:last-child { border-bottom: 1px solid var(--line-strong); }
+  .restore li::before { content: counter(rs); position: absolute; left: 0; top: var(--space-3); font-family: var(--font-display); font-size: var(--step-2); line-height: 1.2; color: var(--accent); }
+
+  @media (min-width: 48rem) {
+    .flow-step { grid-template-columns: 6rem minmax(0, 1fr) 14rem; align-items: start; }
+  }
+  @media (min-width: 60rem) {
+    .two { grid-template-columns: 0.85fr 1.15fr; }
+  }
+</style>

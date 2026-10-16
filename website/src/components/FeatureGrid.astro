@@ -1,0 +1,69 @@
+---
+import StatusBadge from './StatusBadge.astro';
+import { features, type Feature } from '../data/features';
+
+interface Props {
+  phase?: Feature['phase'];
+  limit?: number;
+  /** Heading level used for each phase group; pick one level below the section heading. */
+  headingLevel?: 'h3' | 'h4';
+}
+const { phase, limit, headingLevel = 'h3' } = Astro.props;
+
+const blurbs: Record<Feature['phase'], string> = {
+  MVP: 'The first release',
+  'Phase 2': 'After the first release',
+  'Phase 3': 'Further out',
+};
+let list = phase ? features.filter((f) => f.phase === phase) : [...features];
+if (limit) list = list.slice(0, limit);
+const order: Feature['phase'][] = ['MVP', 'Phase 2', 'Phase 3'];
+const groups = order
+  .map((p) => ({ phase: p, items: list.filter((f) => f.phase === p) }))
+  .filter((g) => g.items.length > 0);
+const Heading = headingLevel;
+---
+
+<div class="ledger">
+  {groups.map((g) => (
+    <section class={`group group--${g.phase.replace(/\s+/g, '').toLowerCase()}`}>
+      <header class="gh">
+        <Heading class="phase">{g.phase}</Heading>
+        <p class="blurb muted small">{blurbs[g.phase]}</p>
+      </header>
+      <ul role="list" class="rows">
+        {g.items.map((f) => (
+          <li class="row">
+            <div class="txt">
+              <p class="title">{f.title}</p>
+              <p class="sum muted">{f.summary}</p>
+            </div>
+            <div class="st"><StatusBadge status={f.status} /></div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  ))}
+</div>
+
+<style>
+  .ledger { display: grid; gap: var(--space-8); }
+  .group { display: grid; gap: var(--space-4) var(--space-7); border-top: 1px solid var(--line-strong); padding-top: var(--space-5); }
+  .group--mvp { border-top-color: var(--accent); }
+  .phase { font-size: var(--step-3); line-height: 1; }
+  .group--mvp .phase { color: var(--accent); }
+  .group--phase2 .phase, .group--phase3 .phase { color: var(--text); }
+  .blurb { margin-top: var(--space-2); }
+  .rows { padding: 0; }
+  .row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--space-2) var(--space-5); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
+  .row:first-child { padding-top: 0; }
+  .txt { flex: 1 1 18rem; min-width: 0; }
+  .title { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.15; max-width: none; }
+  .group--phase3 .title { font-size: var(--step-1); }
+  .sum { margin-top: var(--space-1); max-width: 52ch; }
+  .st { flex: 0 0 auto; }
+  @media (min-width: 56rem) {
+    .group { grid-template-columns: 11rem minmax(0, 1fr); }
+    .gh { position: sticky; top: 6rem; align-self: start; }
+  }
+</style>

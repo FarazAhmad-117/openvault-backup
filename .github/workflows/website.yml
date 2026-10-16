@@ -1,0 +1,70 @@
+name: Website
+
+on:
+  push:
+    paths:
+      - 'website/**'
+      - 'docs/guides/**'
+      - '.github/workflows/website.yml'
+  pull_request:
+    paths:
+      - 'website/**'
+      - 'docs/guides/**'
+      - '.github/workflows/website.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Build, tests, links, a11y, Lighthouse
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    env:
+      # A configured URL makes the build indexable, which the SEO audits need. The real domain is not decided yet.
+      SITE_URL: https://example.com
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+
+      - run: npm ci
+
+      - name: Build (astro check, build, social images)
+        run: npm run build
+
+      - name: Tests (unit + built-page checks)
+        run: npm test
+
+      - name: Link check
+        run: npm run check:links
+
+      - name: Accessibility (axe, WCAG 2.x AA)
+        run: npm run check:a11y
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+
+      - name: Lighthouse CI
+        run: npx lhci autorun
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+
+      - name: Default build stays noindex
+        run: |
+          SITE_URL= npm run build
+          grep -q 'content="noindex,nofollow"' dist/index.html
+          grep -q '^Disallow: /' dist/robots.txt

@@ -1,0 +1,14 @@
+parameters:
+    level: 5
+    phpVersion: 70400
+    paths:
+        - openvault-backup.php
+        - includes
+    excludePaths:
+        - lib
+        - vendor
+    scanDirectories:
+        - lib/action-scheduler
+    bootstrapFiles:
+        - tests/phpstan-bootstrap.php
+    treatPhpDocTypesAsCertain: false

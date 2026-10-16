@@ -1,0 +1,114 @@
+---
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import StatusBadge from '../components/StatusBadge.astro';
+import { siteUrl } from '../config/site';
+import { statusOf } from '../lib/registry';
+import { features } from '../data/features';
+import { faqPage, breadcrumbs } from '../lib/jsonld';
+
+const description = 'How OpenVault Backup is designed to restore or migrate a WordPress site from backup, with a safety snapshot. Pre-alpha: restore does not work yet.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'Restore & migrate', path: '/restore-and-migrate/' }];
+const phaseOf = (id: string) => features.find((x) => x.id === id)!.phase;
+
+interface Item { title: string; text: string; id: string; phase?: string }
+const items: Item[] = [
+  { title: 'Restore from history', id: 'restore-in-place', text: 'Pick a backup from your history, local or at any destination, and restore it in place. Parts are downloaded and checked against SHA-256 checksums first, and you are asked for the password if the archive is encrypted.' },
+  { title: 'Full, database-only or files-only', id: 'restore-in-place', text: 'You see what will be restored, then choose a full restore, the database only, or files only.' },
+  { title: 'A safety snapshot first', id: 'restore-in-place', text: 'Before anything is overwritten, the current database and affected folders are snapshotted. Maintenance mode switches on with a 30 minute failsafe, and the result page offers an Undo restore that uses the snapshot.' },
+  { title: 'The plugin protects itself', id: 'restore-in-place', text: 'Its own tables, settings and credentials are exported before a database import and re-applied afterwards. The plugin folder is never overwritten, and the running restore job survives the database swap. Expect to log in again afterwards.' },
+  { title: 'Restore from an uploaded archive', id: 'restore-upload', text: 'Upload an archive in chunks from your browser, or place it on the server by FTP and scan the folder.' },
+  { title: 'Remote re-indexing from manifest.json', id: 'restore-upload', text: 'On a fresh install, the plugin reads the manifest.json stored next to each backup at your destination and rebuilds your history, so a lost site is not a lost backup.' },
+  { title: 'Selective restore', id: 'restore-upload', phase: 'Phase 2', text: 'Restore a single plugin, theme or folder instead of the whole site. This has no separate status entry yet, so the Phase 2 badge shown is the nearest registry entry, restore from upload.' },
+  { title: 'Migration with safe search and replace', id: 'migration', text: 'Move to a new host or domain, rewriting URLs in the database in a way that is safe for serialized data.' },
+  { title: 'A standalone restorer', id: 'migration', phase: 'Phase 3', text: 'A restorer that works when wp-admin is broken. It has no separate status entry yet, so the Phase 3 badge shown is the nearest registry entry, migration.' },
+];
+
+const faqs = [
+  { q: 'Can I restore a WordPress site with OpenVault today?', a: 'No. OpenVault Backup is pre-alpha and cannot back up or restore yet. Keep using your current backup solution, and do not delete existing backups because of this plugin.' },
+  { q: 'What happens to the plugin itself when a restore replaces my database?', a: 'By design, the plugin exports its own tables, settings and destination credentials before a database import and re-applies them afterwards, and it never overwrites its own folder. This is a design, not a shipped feature.' },
+  { q: 'Can OpenVault move my site to a new domain?', a: 'Not yet. Migration with serialized-safe search and replace is planned for Phase 3, and nothing in the plugin does it today.' },
+];
+---
+
+<Base title="Restore or migrate a WordPress site from backup" description={description} path="/restore-and-migrate/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Restore & migrate" path="/restore-and-migrate/" title="Restore or migrate a WordPress site from backup">
+    <p>OpenVault Backup is being built so a restore is safe to attempt: it snapshots your site first and protects its own settings.</p>
+    <p class="status-line"><StatusBadge status={statusOf('restore-in-place')} /> <span class="small">Pre-alpha: restore does not work yet. This page describes the design.</span></p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <div class="warn-box" role="note">
+        <h2>Restore does not work yet</h2>
+        <p>The plugin cannot back up, restore or migrate a site today. Keep using your current backup solution, and do not delete any other backup because of it.</p>
+      </div>
+
+      <h2 class="sec-title">How it is designed to work</h2>
+      <ol role="list" class="ledger">
+        {items.map((it, i) => (
+          <li class="row">
+            <span class="num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+            <div class="body">
+              <h3>{it.title}</h3>
+              <p class="muted">{it.text}</p>
+            </div>
+            <div class="tag"><StatusBadge status={statusOf(it.id)} /> <span class="small muted">{it.phase ?? phaseOf(it.id)}</span></div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container two">
+      <div class="stack">
+        <h2 class="sec-title">Edge cases on the list</h2>
+      </div>
+      <div class="stack">
+        <ul class="bul">
+          <li class="muted">A different table prefix in the backup than on the site.</li>
+          <li class="muted">A backup made by a newer plugin version than the one opening it.</li>
+          <li class="muted">Not enough disk space to download and extract, which a preflight check is meant to catch.</li>
+          <li class="muted">A backup from a different domain, which belongs to migration.</li>
+        </ul>
+        <p class="muted">See the <a class="link" href="/security/">security design</a> and the <a class="link" href="/roadmap/">roadmap</a> for where each part stands. Looking at alternatives that work today? Read <a class="link" href="/compare/">how OpenVault compares</a>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container two">
+      <div class="stack"><h2 class="sec-title">Questions</h2></div>
+      <div class="stack-lg">
+        {faqs.map((f) => (
+          <div class="qa">
+            <h3>{f.q}</h3>
+            <p class="muted">{f.a}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
+  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
+  .row { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
+  .num { font-family: var(--font-display); font-size: var(--step-3); line-height: 1; color: var(--accent); }
+  .body { display: grid; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
+  .body h3 { font-size: var(--step-1); }
+  .body p { max-width: 60ch; }
+  .tag { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); align-content: start; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .bul { padding-left: 1.2em; display: grid; gap: var(--space-2); max-width: 60ch; list-style: disc; }
+  .qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
+  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
+  @media (min-width: 48rem) {
+    .row { grid-template-columns: 4rem minmax(0, 1fr) 14rem; align-items: start; }
+  }
+  @media (min-width: 60rem) {
+    .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+  }
+</style>

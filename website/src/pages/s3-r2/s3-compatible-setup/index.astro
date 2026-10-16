@@ -1,0 +1,58 @@
+---
+import { getEntry, render } from 'astro:content';
+import Base from '../../../layouts/Base.astro';
+import PageHead from '../../../components/PageHead.astro';
+import OutlineNotice from '../../../components/OutlineNotice.astro';
+import GuideProse from '../../../components/GuideProse.astro';
+import { siteUrl } from '../../../config/site';
+import { statusOf } from '../../../lib/registry';
+import { breadcrumbs } from '../../../lib/jsonld';
+import { providers } from '../../../data/providers';
+
+const description = 'Outline of the fields every S3-compatible provider needs in OpenVault Backup, and how to limit an access key to one bucket. Not available yet.';
+const path = '/s3-r2/s3-compatible-setup/';
+const trail = [
+  { name: 'Home', path: '/' },
+  { name: 'S3 & R2', path: '/s3-r2/' },
+  { name: 'Generic setup', path },
+];
+const status = statusOf('destination-s3');
+const entry = await getEntry('guides', 's3-compatible-setup');
+const Content = entry ? (await render(entry)).Content : null;
+---
+
+<Base title="S3-compatible setup guide" description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Generic setup" path={path} title="S3-compatible setup guide" trail={[{ name: 'S3 & R2', href: '/s3-r2/' }]}>
+    <p>The fields and steps shared by every S3-compatible provider, including a custom endpoint.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <OutlineNotice status={status} />
+
+      {Content ? (
+        <GuideProse><Content /></GuideProse>
+      ) : (
+        <p class="muted">The outline for this guide could not be loaded.</p>
+      )}
+
+      <div class="stack">
+        <h2 class="sec-title">Provider-specific notes</h2>
+        <ul role="list" class="cluster provs">
+          {providers.map((p) => <li><a class="link" href={`/s3-r2/${p.slug}/`}>{p.name}</a></li>)}
+        </ul>
+      </div>
+
+      <nav class="pn" aria-label="Guide navigation">
+        <a class="btn btn--secondary" href="/s3-r2/">Previous: S3 and R2 overview</a>
+        <a class="btn btn--secondary" href="/docs/">Next: All guides</a>
+      </nav>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .provs { padding: 0; }
+  .pn { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+  .pn .btn { flex: 1 1 14rem; max-width: 22rem; }
+</style>

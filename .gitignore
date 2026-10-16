@@ -1,0 +1,10 @@
+/vendor/
+/node_modules/
+/assets/admin/build/
+/dist/
+/website/node_modules/
+/website/dist/
+/website/.vercel/
+/website/.astro/
+.wp-env.override.json
+.DS_Store

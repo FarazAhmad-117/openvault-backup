@@ -1,0 +1,35 @@
+name: Dev build
+
+# Keeps a rolling "dev" pre-release with the newest zip from main, so there is always something to download:
+#   https://github.com/<owner>/<repo>/releases/download/dev/openvault-backup-dev.zip
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: sh bin/build-zip.sh
+
+      - name: Replace the dev pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp dist/openvault-backup.zip dist/openvault-backup-dev.zip
+          gh release delete dev --yes --cleanup-tag || true
+          gh release create dev dist/openvault-backup-dev.zip \
+            --prerelease \
+            --target "$GITHUB_SHA" \
+            --title "Development build" \
+            --notes "Automatic build of the latest commit on main ($GITHUB_SHA). Not for production sites."

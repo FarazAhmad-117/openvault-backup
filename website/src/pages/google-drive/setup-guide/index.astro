@@ -1,0 +1,76 @@
+---
+import { getEntry, render } from 'astro:content';
+import Base from '../../../layouts/Base.astro';
+import PageHead from '../../../components/PageHead.astro';
+import OutlineNotice from '../../../components/OutlineNotice.astro';
+import GuideProse from '../../../components/GuideProse.astro';
+import { siteUrl } from '../../../config/site';
+import { statusOf } from '../../../lib/registry';
+import { breadcrumbs } from '../../../lib/jsonld';
+
+const description = 'Outline of the planned steps to connect Google Drive to OpenVault Backup with your own Google Cloud project and drive.file scope. Not available yet.';
+const path = '/google-drive/setup-guide/';
+const trail = [
+  { name: 'Home', path: '/' },
+  { name: 'Google Drive', path: '/google-drive/' },
+  { name: 'Setup guide', path },
+];
+const status = statusOf('destination-gdrive');
+const entry = await getEntry('guides', 'google-drive-setup');
+const Content = entry ? (await render(entry)).Content : null;
+
+const errors = [
+  { name: 'redirect_uri_mismatch', text: 'Google only accepts the redirect URI you registered. The one entered in Google Cloud Console must match the one the plugin shows exactly, character for character.' },
+  { name: '"Google hasn\'t verified this app" warning', text: 'Expected for an app you made yourself that Google has not reviewed. For your own project it is acceptable to continue.' },
+  { name: 'invalid_grant after 7 days', text: 'This usually means the OAuth app was left in Testing status, which expires access after 7 days. Publish the app (In production) and connect again.' },
+];
+---
+
+<Base title="Google Drive setup guide" description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Setup guide" path={path} title="Google Drive setup guide" trail={[{ name: 'Google Drive', href: '/google-drive/' }]}>
+    <p>The planned steps to connect Google Drive with your own Google Cloud project.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <OutlineNotice status={status} />
+
+      <div class="warn-box" role="note">
+        <h2>Publish the app, or access expires after 7 days</h2>
+        <p>A Google OAuth app left in Testing status loses access after 7 days, and backups would stop. Step 8 sets the publishing status to In production. Do not skip it.</p>
+      </div>
+
+      {Content ? (
+        <GuideProse><Content /></GuideProse>
+      ) : (
+        <p class="muted">The outline for this guide could not be loaded.</p>
+      )}
+
+      <div class="stack">
+        <h2 class="sec-title">If something goes wrong</h2>
+        <dl class="errs">
+          {errors.map((e) => (
+            <div>
+              <dt>{e.name}</dt>
+              <dd class="muted">{e.text}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+
+      <nav class="pn" aria-label="Guide navigation">
+        <a class="btn btn--secondary" href="/google-drive/">Previous: Google Drive overview</a>
+        <a class="btn btn--secondary" href="/docs/">Next: All guides</a>
+      </nav>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .errs { display: grid; margin: 0; border-top: 1px solid var(--line-strong); max-width: var(--measure); }
+  .errs div { display: grid; gap: var(--space-1); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
+  .errs dt { font-weight: 600; overflow-wrap: anywhere; }
+  .errs dd { margin: 0; }
+  .pn { display: flex; flex-wrap: wrap; gap: var(--space-3); }
+  .pn .btn { flex: 1 1 14rem; max-width: 22rem; }
+</style>

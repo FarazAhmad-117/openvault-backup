@@ -1,0 +1,87 @@
+---
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
+import Base from '../layouts/Base.astro';
+import PageHead from '../components/PageHead.astro';
+import { repoUrl, siteUrl } from '../config/site';
+import { breadcrumbs } from '../lib/jsonld';
+
+const description = 'Every notable change to OpenVault Backup, release by release, read straight from the project changelog.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'Changelog', path: '/changelog/' }];
+
+interface Section { heading: string; items: string[] }
+
+// Build runs from website/, and the bundled page lives in dist/chunks, so try several roots.
+const candidates = [
+  resolve(process.cwd(), '../CHANGELOG.md'),
+  fileURLToPath(new URL('../../../CHANGELOG.md', import.meta.url)),
+  fileURLToPath(new URL('../../CHANGELOG.md', import.meta.url)),
+];
+
+let raw: string | null = null;
+for (const p of candidates) {
+  try {
+    if (existsSync(p)) { raw = readFileSync(p, 'utf8'); break; }
+  } catch { /* try the next candidate */ }
+}
+
+const sections: Section[] = [];
+if (raw) {
+  for (const line of raw.split(/\r?\n/)) {
+    const h = /^##\s+(.+?)\s*$/.exec(line);
+    if (h) { sections.push({ heading: h[1], items: [] }); continue; }
+    const cur = sections[sections.length - 1];
+    if (!cur) continue;
+    const b = /^[-*]\s+(.*)$/.exec(line);
+    if (b) cur.items.push(b[1]);
+    else if (/^\s{2,}\S/.test(line) && cur.items.length) cur.items[cur.items.length - 1] += ' ' + line.trim();
+  }
+}
+
+// Split on backticks so inline code renders as <code> without raw HTML.
+const parts = (s: string) => s.split('`');
+---
+
+<Base title="Changelog" description={description} path="/changelog/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Changelog" path="/changelog/" title="What changed, and when">
+    <p>Read from the project's CHANGELOG.md when this site is built. The plugin is pre-alpha, so most entries are foundation work.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container">
+      {sections.length === 0 ? (
+        <div class="stack prose">
+          <p>The changelog could not be loaded in this build.</p>
+          <p>You can read it on <a href={`${repoUrl()}/blob/main/CHANGELOG.md`} rel="noopener">GitHub</a>.</p>
+        </div>
+      ) : (
+        <div class="log">
+          {sections.map((s) => (
+            <section class="entry">
+              <h2>{s.heading}</h2>
+              <ul class="prose">
+                {s.items.map((it) => (
+                  <li>{parts(it).map((t, i) => (i % 2 ? <code>{t}</code> : t))}</li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  </section>
+</Base>
+
+<style>
+  .log { display: grid; gap: var(--space-8); }
+  .entry { display: grid; gap: var(--space-4) var(--space-7); border-top: 1px solid var(--line-strong); padding-top: var(--space-5); }
+  .entry h2 { font-size: var(--step-3); color: var(--accent); }
+  .entry ul { max-width: var(--measure); padding-left: 1.3em; }
+  .entry li + li { margin-top: 0.6em; }
+  .entry li::marker { color: var(--accent); }
+  @media (min-width: 56rem) {
+    .entry { grid-template-columns: 11rem minmax(0, 1fr); }
+    .entry h2 { position: sticky; top: 6rem; align-self: start; font-size: var(--step-2); }
+  }
+</style>

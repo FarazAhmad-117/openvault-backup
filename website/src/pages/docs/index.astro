@@ -1,0 +1,73 @@
+---
+import { getCollection } from 'astro:content';
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import { siteUrl } from '../../config/site';
+import { statusOf } from '../../lib/registry';
+import { breadcrumbs } from '../../lib/jsonld';
+import { guideHref, guideTitle } from '../../lib/guides';
+
+const description = 'Setup guide outlines for OpenVault Backup: Google Drive, Cloudflare R2, Backblaze B2, S3-compatible storage, Dropbox, OneDrive and server cron. Not usable yet.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'Docs', path: '/docs/' }];
+
+// Display order, one-line summary and registry feature (if any) per guide.
+const meta: { id: string; summary: string; feature?: string }[] = [
+  { id: 'google-drive-setup', summary: 'Connect Google Drive with your own Google Cloud project, using the drive.file scope only.', feature: 'destination-gdrive' },
+  { id: 'cloudflare-r2', summary: 'Create a bucket and an API token scoped to it, then use the account endpoint with region auto.', feature: 'destination-s3' },
+  { id: 'backblaze-b2', summary: 'Create a private bucket and an application key restricted to it, then use the S3 endpoint from the bucket page.', feature: 'destination-s3' },
+  { id: 's3-compatible-setup', summary: 'The fields every S3-compatible provider needs, and how to limit a key to one bucket.', feature: 'destination-s3' },
+  { id: 'dropbox', summary: 'Create a Dropbox app limited to its own App folder and connect it with PKCE. Planned for Phase 3.', feature: 'destination-dropbox-onedrive-sftp' },
+  { id: 'onedrive', summary: 'Register an Azure app with app-folder access and connect it. Planned for Phase 3.', feature: 'destination-dropbox-onedrive-sftp' },
+  { id: 'server-cron', summary: 'Why WP-Cron only runs when someone visits, and how to trigger it from a real server cron instead.' },
+];
+
+const entries = await getCollection('guides');
+const byId = new Map(entries.map((e) => [e.id, e]));
+const guides = meta
+  .filter((m) => byId.has(m.id))
+  .map((m) => ({ ...m, title: guideTitle(byId.get(m.id)!.body ?? ''), href: guideHref(m.id), status: m.feature ? statusOf(m.feature) : undefined }));
+---
+
+<Base title="Docs" description={description} path="/docs/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Docs" path="/docs/" title="Setup guides">
+    <p>These guides are outlines. They sketch the planned setup for each destination and will grow into full walkthroughs with screenshots as each destination ships.</p>
+    <p>No destination works yet, so nothing here can be followed end to end today. Each guide shows the real status of the feature it covers.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container">
+      <h2 class="visually-hidden">All guides</h2>
+      <ul role="list" class="guides">
+        {guides.map((g) => (
+          <li class="guide">
+            <div class="g-body">
+              <h3><a href={g.href}>{g.title}</a></h3>
+              <p class="muted">{g.summary}</p>
+            </div>
+            <div class="g-tags">
+              <span class="tag">Outline</span>
+              {g.status && <StatusBadge status={g.status} />}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .guides { padding: 0; display: grid; }
+  .guide { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
+  .guide:last-child { border-bottom: 1px solid var(--line-strong); }
+  .g-body { display: grid; gap: var(--space-2); }
+  .g-body h3 { font-size: var(--step-2); }
+  .g-body h3 a { text-decoration: none; }
+  .g-body h3 a:hover { text-decoration: underline; }
+  .g-body p { max-width: 56ch; }
+  .g-tags { display: flex; flex-wrap: wrap; align-items: start; gap: var(--space-2); }
+  .tag { display: inline-flex; padding: 0.2em 0.75em; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: var(--step--1); font-weight: 600; line-height: 1.5; color: var(--muted); }
+  @media (min-width: 48rem) {
+    .guide { grid-template-columns: minmax(0, 1fr) 14rem; align-items: start; }
+  }
+</style>

@@ -1,0 +1,129 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import { repoUrl, siteUrl } from '../../config/site';
+import { statusOf } from '../../lib/registry';
+import { faqPage, breadcrumbs } from '../../lib/jsonld';
+import { competitors, CHECKED_ON, TRADEMARK_NOTICE } from '../../data/competitors';
+
+const description = 'A free WordPress backup plugin in design: how OpenVault Backup plans to differ from UpdraftPlus, BackWPup and Duplicator. Pre-alpha, sourced facts only.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'Compare', path: '/compare/' }];
+
+const faqs = [
+  {
+    q: 'Is OpenVault ready to replace my current backup plugin?',
+    a: 'No. OpenVault Backup is pre-alpha and cannot back up or restore a site yet. Keep your current backups running, and do not delete them because of anything on this site.',
+  },
+  {
+    q: 'What should I check when choosing a WordPress backup plugin?',
+    a: 'Check that it works today, which storage destinations are in the free version, whether you can schedule backups, whether you can restore from the dashboard, and which of those sit behind a paid plan. Then test a restore on a copy of your site before you need it.',
+  },
+  {
+    q: 'Why does OpenVault want my own Google or S3 credentials?',
+    a: 'By design, tokens and data travel only between your site and your own storage account, with no relay server in the middle. The trade-off is a little setup work: you create the Google app or the access keys yourself.',
+  },
+];
+
+const designs: [string, string, readonly (readonly [string, string])[]][] = [
+  ['Free, with no paid tiers', 'GPLv2 or later, and every feature is free.', []],
+  ['Your own credentials', 'You connect your own Google OAuth app or S3 keys; there is no relay server.', [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3']]],
+  ['Resumable chunked jobs', 'Long tasks run in small batches built for roughly 30 second limits.', [['One-click backups', 'backup-manual']]],
+  ['Rediscoverable backups', 'A manifest.json beside every backup lets a fresh install find it again.', [['Remote re-indexing', 'restore-upload']]],
+  ['Safety snapshot before restore', 'A restore first snapshots the current site, so it can be undone.', [['Restore from history', 'restore-in-place']]],
+];
+---
+
+<Base title="Free WordPress backup plugin: how OpenVault compares" description={description} path="/compare/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="Compare" path="/compare/" title="Free WordPress backup plugin: how OpenVault compares">
+    <p>OpenVault Backup is being built as a free, open-source backup plugin. These pages put its design next to what other plugins say about themselves.</p>
+    <p class="status-line"><StatusBadge status={statusOf('backup-manual')} /> <span class="small">Pre-alpha: it cannot back up or restore yet. Everything below about OpenVault is a design.</span></p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <div class="warn-box" role="note">
+        <h2>Not a replacement yet</h2>
+        <p>If you need working backups today, use a released plugin and keep your current backups. The comparisons are for people deciding what to follow, not what to rely on.</p>
+      </div>
+
+      <h2 class="sec-title">What OpenVault is designed to be</h2>
+      <ul role="list" class="ledger">
+        {designs.map(([title, text, badges]) => (
+          <li class="row">
+            <h3>{title}</h3>
+            <p class="muted">{text}</p>
+            <ul role="list" class="tags">
+              {badges.length > 0 ? badges.map(([n, id]) => (
+                <li><span class="small muted">{n}</span> <StatusBadge status={statusOf(id)} /></li>
+              )) : <li><span class="rule-tag">Design rule</span></li>}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container stack-lg">
+      <h2 class="sec-title">Side-by-side pages</h2>
+      <ul role="list" class="grid grid--3">
+        {competitors.map((c) => (
+          <li class="panel stack">
+            <h3><a href={`/compare/${c.slug}/`}>OpenVault vs {c.name}</a></h3>
+            <p class="muted">{c.summary}</p>
+            <a class="link" href={`/compare/${c.slug}/`}>Read the comparison</a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container two">
+      <div class="stack">
+        <h2 class="sec-title">Sources and corrections</h2>
+      </div>
+      <div class="stack">
+        <p class="muted">Information checked on {CHECKED_ON}; sources linked; plans change, please verify. Spotted a mistake? <a class="link" href={`${repoUrl()}/issues`} rel="noopener">Open an issue</a>.</p>
+        <p class="small muted">{TRADEMARK_NOTICE}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container two">
+      <div class="stack"><h2 class="sec-title">Questions</h2></div>
+      <div class="stack-lg">
+        {faqs.map((f) => (
+          <div class="qa">
+            <h3>{f.q}</h3>
+            <p class="muted">{f.a}</p>
+          </div>
+        ))}
+        <p class="muted">See how planned restores work on the <a class="link" href="/restore-and-migrate/">restore and migrate page</a>.</p>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
+  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
+  .row { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
+  .row h3 { font-size: var(--step-1); }
+  .tags { padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+  .tags li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .rule-tag { display: inline-flex; padding: 0.2em 0.75em; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: var(--step--1); font-weight: 600; color: var(--muted); }
+  .panel { list-style: none; }
+  .panel h3 { font-size: var(--step-2); }
+  .panel h3 a { text-decoration: none; }
+  .panel h3 a:hover { text-decoration: underline; }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
+  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
+  @media (min-width: 60rem) {
+    .row { grid-template-columns: 15rem minmax(0, 1fr) 16rem; align-items: start; }
+    .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+  }
+</style>

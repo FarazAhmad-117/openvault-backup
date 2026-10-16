@@ -1,0 +1,112 @@
+---
+import Base from '../../../layouts/Base.astro';
+import PageHead from '../../../components/PageHead.astro';
+import StatusBadge from '../../../components/StatusBadge.astro';
+import { repoUrl, siteUrl } from '../../../config/site';
+import { statusOf } from '../../../lib/registry';
+import { breadcrumbs } from '../../../lib/jsonld';
+import { competitors, factsFor, topicLabels, topicOrder, CHECKED_ON, TRADEMARK_NOTICE } from '../../../data/competitors';
+import { openvaultDesign, fitCompetitor } from '../../../data/compare';
+
+export function getStaticPaths() {
+  return competitors.map((competitor) => ({ params: { slug: competitor.slug }, props: { competitor } }));
+}
+
+const { competitor } = Astro.props;
+const path = `/compare/${competitor.slug}/`;
+const trail = [{ name: 'Home', path: '/' }, { name: 'Compare', path: '/compare/' }, { name: `OpenVault vs ${competitor.name}`, path }];
+const description = `OpenVault Backup vs ${competitor.name}: what OpenVault is designed to do (pre-alpha, not working yet) next to ${competitor.name}'s own sourced facts.`;
+const fits = fitCompetitor[competitor.slug];
+---
+
+<Base title={`OpenVault vs ${competitor.name}`} description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb={`vs ${competitor.name}`} path={path} title={`OpenVault vs ${competitor.name}`} trail={[{ name: 'Compare', href: '/compare/' }]}>
+    <p>{competitor.summary} OpenVault Backup is a free, open-source plugin that is still pre-alpha, so this page compares its design with what {competitor.name} says about itself.</p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <div class="warn-box" role="note">
+        <h2>OpenVault cannot back up or restore yet</h2>
+        <p>Every OpenVault statement below describes a design, with its real status badge. If you need working backups today, keep or choose a released plugin.</p>
+      </div>
+
+      <h2 class="sec-title">At a glance</h2>
+      <ul role="list" class="ledger">
+        {topicOrder.map((topic) => {
+          const facts = factsFor(competitor, topic);
+          const d = openvaultDesign[topic];
+          return (
+            <li class="row">
+              <h3 class="topic">{topicLabels[topic]}</h3>
+              <div class="cell">
+                <p class="who small muted">OpenVault (design)</p>
+                <p>{d.text}</p>
+                <ul role="list" class="tags">
+                  {d.badges.length > 0 ? d.badges.map(([n, id]) => (
+                    <li><span class="small muted">{n}</span> <StatusBadge status={statusOf(id)} /></li>
+                  )) : <li><span class="rule-tag">Design rule</span></li>}
+                </ul>
+              </div>
+              <div class="cell">
+                <p class="who small muted">{competitor.name} (as stated by the source)</p>
+                {facts.length > 0 ? facts.map((x) => (
+                  <p>{x.claim} <a class="link small" href={x.source} rel="noopener nofollow">Source</a> <span class="small muted">(checked {x.checkedOn})</span></p>
+                )) : <p class="muted">Not verified</p>}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container two">
+      <div class="stack"><h2 class="sec-title">Where each approach fits</h2></div>
+      <div class="stack-lg">
+        <div class="stack">
+          <h3>Reasons to choose {competitor.name} today</h3>
+          <ul class="bul">{fits.map((t) => <li class="muted">{t}</li>)}</ul>
+        </div>
+        <div class="stack">
+          <h3>What OpenVault is aiming for</h3>
+          <ul class="bul">
+            <li class="muted">All features free under the GPLv2 or later, with no paid tiers.</li>
+            <li class="muted">Your own cloud credentials, with no relay server.</li>
+            <li class="muted">Resumable chunked jobs, a manifest.json beside every backup, and a safety snapshot before every restore.</li>
+          </ul>
+          <p class="muted">These are goals for a project that has not shipped a working backup. Judge it by its <a class="link" href="/roadmap/">roadmap</a>, not by this page.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container stack">
+      <h2 class="sec-title">Sources and corrections</h2>
+      <p class="muted">Information checked on {CHECKED_ON}; sources linked; plans change, please verify. Spotted a mistake? <a class="link" href={`${repoUrl()}/issues`} rel="noopener">Open an issue</a>.</p>
+      <p class="muted">Official pages: <a class="link" href={competitor.wporgUrl} rel="noopener nofollow">{competitor.name} on WordPress.org</a>, <a class="link" href={competitor.officialUrl} rel="noopener nofollow">{competitor.name} website</a>.</p>
+      <p class="small muted">{TRADEMARK_NOTICE}</p>
+      <p class="muted">Curious about the project? <a class="link" href="/compare/">See the other comparisons</a> or <a class="link" href="/download/">read about the pre-alpha download</a>.</p>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
+  .row { display: grid; gap: var(--space-4) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
+  .topic { font-size: var(--step-1); }
+  .cell { display: grid; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; align-content: start; }
+  .cell p { max-width: 60ch; }
+  .who { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .tags { padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
+  .tags li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+  .rule-tag { display: inline-flex; padding: 0.2em 0.75em; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: var(--step--1); font-weight: 600; color: var(--muted); }
+  .two { display: grid; gap: var(--space-8); }
+  .bul { padding-left: 1.2em; display: grid; gap: var(--space-2); max-width: 60ch; list-style: disc; }
+  @media (min-width: 60rem) {
+    .row { grid-template-columns: 12rem minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+  }
+</style>

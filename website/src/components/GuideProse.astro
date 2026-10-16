@@ -1,0 +1,12 @@
+---
+// Wraps rendered guide markdown. The outline files keep one logical line per row without blank
+// lines between them, so soft line breaks are preserved (pre-line) instead of merged.
+---
+
+<div class="prose guide-prose"><slot /></div>
+
+<style>
+  .guide-prose :global(p) { white-space: pre-line; overflow-wrap: anywhere; }
+  .guide-prose :global(li) { overflow-wrap: anywhere; }
+  .guide-prose :global(strong) { color: var(--text); }
+</style>

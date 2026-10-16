@@ -1,0 +1,62 @@
+<?xml version="1.0"?>
+<ruleset name="OpenVault Backup">
+	<description>WordPress Coding Standards for OpenVault Backup.</description>
+
+	<file>./openvault-backup.php</file>
+	<file>./uninstall.php</file>
+	<file>./includes</file>
+	<file>./tests</file>
+
+	<exclude-pattern>/vendor/*</exclude-pattern>
+	<exclude-pattern>/node_modules/*</exclude-pattern>
+	<exclude-pattern>/lib/*</exclude-pattern>
+
+	<arg name="extensions" value="php"/>
+	<arg name="colors"/>
+	<arg value="ps"/>
+	<arg name="parallel" value="8"/>
+
+	<config name="testVersion" value="7.4-"/>
+	<config name="minimum_wp_version" value="6.9"/>
+
+	<rule ref="WordPress">
+		<!-- PSR-4: class files are named after the class, not class-foo.php. -->
+		<exclude name="WordPress.Files.FileName.InvalidClassFileName"/>
+		<exclude name="WordPress.Files.FileName.NotHyphenatedLowercase"/>
+		<!-- Unimplemented plan stubs carry no @package tag; every implemented file does. Re-enable once all stubs are built. -->
+		<exclude name="Squiz.Commenting.FileComment.MissingPackageTag"/>
+	</rule>
+	<rule ref="PHPCompatibilityWP"/>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="openvault-backup"/>
+			</property>
+		</properties>
+	</rule>
+
+	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
+		<properties>
+			<property name="prefixes" type="array">
+				<element value="OpenVault\Backup"/>
+				<element value="ovb"/>
+				<element value="OVB"/>
+			</property>
+		</properties>
+		<!-- WPCS 3 rejects prefixes shorter than 4 characters, but the project convention is ovb_ / OVB_ (see CLAUDE.md). -->
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.ShortPrefixPassed"/>
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound"/>
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound"/>
+		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound"/>
+		<exclude-pattern>/tests/*</exclude-pattern>
+	</rule>
+
+	<!-- Tests: relax rules that make no sense for test code. -->
+	<rule ref="Squiz.Commenting">
+		<exclude-pattern>/tests/*</exclude-pattern>
+	</rule>
+	<rule ref="Generic.Commenting.DocComment">
+		<exclude-pattern>/tests/*</exclude-pattern>
+	</rule>
+</ruleset>

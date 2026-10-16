@@ -1,0 +1,134 @@
+---
+import Base from '../../layouts/Base.astro';
+import PageHead from '../../components/PageHead.astro';
+import StatusBadge from '../../components/StatusBadge.astro';
+import { siteUrl } from '../../config/site';
+import { statusOf } from '../../lib/registry';
+import { faqsByTag } from '../../data/faq';
+import { faqPage, breadcrumbs } from '../../lib/jsonld';
+import { guideHref } from '../../lib/guides';
+import { providers } from '../../data/providers';
+
+const description = 'How OpenVault Backup is designed to back up WordPress to S3, Cloudflare R2, Backblaze B2, Wasabi or Spaces with your own bucket. Pre-alpha, not working yet.';
+const trail = [{ name: 'Home', path: '/' }, { name: 'S3 & R2', path: '/s3-r2/' }];
+const status = statusOf('destination-s3');
+const faqs = faqsByTag('s3');
+const genericHref = guideHref('s3-compatible-setup');
+---
+
+<Base title="Back up WordPress to S3, R2, B2 and Wasabi" description={description} path="/s3-r2/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
+  <PageHead crumb="S3 & R2" path="/s3-r2/" title="Back up WordPress to S3, Cloudflare R2, Backblaze B2 or Wasabi">
+    <p>OpenVault Backup is being built to send backups to a bucket you own, on any S3-compatible service, using access keys you create yourself.</p>
+    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: S3-compatible storage does not work yet. This page describes the design.</span></p>
+  </PageHead>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <div class="warn-box" role="note">
+        <h2>Not working yet</h2>
+        <p>The plugin cannot connect to any S3-compatible service, back up or restore today. Do not rely on it, and do not delete any other backup because of it.</p>
+      </div>
+
+      <h2 class="sec-title">One signer, many providers</h2>
+      <div class="grid grid--3">
+        <article class="panel stack">
+          <h3>Bring your own bucket</h3>
+          <p class="muted">You create the bucket and the access keys in your own account with the provider. There is no relay server, so only your site and your storage account ever see the data.</p>
+        </article>
+        <article class="panel stack">
+          <h3>No AWS SDK</h3>
+          <p class="muted">The plugin is built to write its own Signature Version 4 signer and send requests with the WordPress HTTP API. That one signer is meant to serve every provider below.</p>
+        </article>
+        <article class="panel stack">
+          <h3>Presets plus a custom endpoint</h3>
+          <p class="muted">Planned presets cover AWS, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces and IDrive e2. A custom endpoint option takes any other S3-compatible service.</p>
+        </article>
+      </div>
+      <ul role="list" class="facts">
+        <li><strong>Multipart uploads</strong><span class="muted">Large archives are designed to be sent in parts, so a big backup does not depend on one long request.</span></li>
+        <li><strong>A manifest with every backup</strong><span class="muted">Each backup also uploads a manifest.json, which lets a fresh install find and re-index it later.</span></li>
+        <li><strong>Uninstalling keeps your backups</strong><span class="muted">The plugin never deletes backups held at your remote destinations when you uninstall it.</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container stack-lg">
+      <div class="stack">
+        <h2 class="sec-title">Pick your provider</h2>
+        <p class="muted">Each provider names its endpoint a little differently. The patterns below come from each provider's own documentation, and every page links to it.</p>
+      </div>
+      <ul role="list" class="ledger">
+        {providers.map((p) => (
+          <li class="row">
+            <div class="who">
+              <h3><a href={`/s3-r2/${p.slug}/`}>{p.name}</a></h3>
+              <StatusBadge status={status} />
+            </div>
+            <div class="ep">
+              <span class="label small muted">Endpoint pattern</span>
+              <code>{p.endpointPattern}</code>
+            </div>
+            <p class="muted note">{p.regionNote}</p>
+          </li>
+        ))}
+      </ul>
+      <p class="muted">Using something else? The <a class="link" href={genericHref}>generic S3-compatible setup outline</a> lists the fields every provider needs.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container two">
+      <div class="stack">
+        <h2 class="sec-title">How your keys are protected</h2>
+      </div>
+      <div class="stack">
+        <p class="muted">By design, access keys and secrets are encrypted at rest in the plugin, using a key derived from your WordPress salts or an <code>OVB_ENCRYPTION_KEY</code> constant that you can set in wp-config. Secrets are never shown again in the interface; you see a masked value and a button to replace it.</p>
+        <p class="muted">This is a design commitment, not a shipped feature. Give each key only what it needs: list, put, get and delete on the one bucket.</p>
+        <p><a class="btn btn--secondary" href="/security/">Read the security design</a></p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section section--surface">
+    <div class="container two">
+      <div class="stack">
+        <h2 class="sec-title">Questions</h2>
+        <p class="muted">The short answers are on the <a class="link" href="/faq/">FAQ</a>.</p>
+      </div>
+      <div class="stack-lg">
+        {faqs.map((f) => (
+          <div class="qa">
+            <h3>{f.q}</h3>
+            <p class="muted">{f.a}</p>
+          </div>
+        ))}
+        <p class="muted">Prefer a consumer cloud? <a class="link" href="/google-drive/">Google Drive with your own OAuth app</a> is the planned alternative.</p>
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
+  .panel h3 { font-size: var(--step-2); }
+  .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .facts { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
+  .facts li { display: grid; gap: var(--space-1); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
+  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
+  .row { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
+  .who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
+  .who h3 { font-size: var(--step-2); }
+  .who h3 a { text-decoration: none; }
+  .who h3 a:hover { text-decoration: underline; }
+  .ep { display: grid; gap: var(--space-1); min-width: 0; }
+  .ep code { overflow-wrap: anywhere; justify-self: start; max-width: 100%; }
+  .note { max-width: 56ch; }
+  .qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
+  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
+  @media (min-width: 60rem) {
+    .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+    .row { grid-template-columns: 15rem minmax(0, 1fr); align-items: start; }
+    .note { grid-column: 2; }
+  }
+</style>
