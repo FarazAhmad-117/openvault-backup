@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       OpenVault Backup
- * Plugin URI:        https://github.com/openvault/openvault-backup
+ * Plugin URI:        https://github.com/FarazAhmad-117/openvault-backup
  * Description:       Free, open-source backups. Connect your own Google Drive, S3-compatible or local storage. No relay servers, no paid tiers.
  * Version:           0.1.0
  * Requires at least: 6.9
