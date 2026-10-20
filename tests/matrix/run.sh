@@ -81,9 +81,12 @@ run_once() {
 	fi
 	pull_retry "$db" || { echo "CONTAINER FAIL: could not pull $db (error pulling image)"; return 1; }
 	docker network create "$base" >/dev/null || return 1
-	docker run -d --name "$base-db" --network "$base" --network-alias db \
+	# OVB_MATRIX_DOCKER_ARGS (e.g. "--cpus=0.5") slows containers down to reproduce slow-host timing bugs.
+	# shellcheck disable=SC2086
+	docker run -d --name "$base-db" --network "$base" --network-alias db ${OVB_MATRIX_DOCKER_ARGS:-} \
 		-e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=wp "$db" >/dev/null || { echo "CONTAINER FAIL: db start"; return 1; }
-	docker run -d --name "$base-web" --network "$base" \
+	# shellcheck disable=SC2086
+	docker run -d --name "$base-web" --network "$base" ${OVB_MATRIX_DOCKER_ARGS:-} \
 		-e WP_VERSION="$wp" -e VARIANT="$variant" -e DB_HOST=db -e LOWER_MIN_WP="$lower" \
 		-v "$MOUNT:/src:ro" \
 		-v "$MOUNT/tests/matrix/php-$ini.ini:/usr/local/etc/php/conf.d/zz-profile.ini:ro" \
@@ -159,4 +162,16 @@ for i in "${!IDS[@]}"; do
 done
 echo "(* = informational profile, does not fail the run)"
 echo "logs: dist/matrix-logs/"
+
+# Show WHY a profile failed right in the output (CI keeps the full logs only as a downloadable artifact).
+for i in "${!IDS[@]}"; do
+	id=${IDS[$i]}
+	[ "$(cat "$LOGS/$id.status" 2>/dev/null || echo 99)" = 0 ] && continue
+	[ "${INFO[$i]}" = yes ] && continue
+	echo
+	echo "== why $id failed (first failing lines, then the end of its log)"
+	grep -E '^FAIL |^CONTAINER FAIL|Fatal error|PHP Fatal|Allowed memory|Maximum execution time' "$LOGS/$id.log" | head -25
+	echo "-- last 15 log lines"
+	tail -n 15 "$LOGS/$id.log"
+done
 exit "$overall"
