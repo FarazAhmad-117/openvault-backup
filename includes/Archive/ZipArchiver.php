@@ -225,7 +225,7 @@ final class ZipArchiver implements ArchiverInterface {
 	 */
 	public function finish_part() {
 		$size = $this->end_slice();
-		$hash = $size > 0 ? hash_file( 'sha256', $this->path ) : false;
+		$hash = $size > 0 && is_file( $this->path ) ? hash_file( 'sha256', $this->path ) : false;
 		if ( 0 === $size || false === $hash ) {
 			throw new ArchiveException( 'The archive part is empty or could not be read back.' );
 		}

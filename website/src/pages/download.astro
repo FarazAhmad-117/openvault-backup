@@ -5,7 +5,7 @@ import DownloadButton from '../components/DownloadButton.astro';
 import { PLUGIN_VERSION, repoUrl, devDownloadUrl, siteUrl } from '../config/site';
 import { howTo, breadcrumbs } from '../lib/jsonld';
 
-const description = 'Download OpenVault Backup, a free GPLv2 WordPress plugin. Pre-alpha: local backups only, no restore yet. Requires WordPress 6.9+ and PHP 7.4+.';
+const description = 'Download OpenVault Backup, a free GPLv2 WordPress plugin. Pre-alpha: local backups only, no restore yet. Requires WordPress 6.5+ and PHP 7.4+.';
 const trail = [{ name: 'Home', path: '/' }, { name: 'Download', path: '/download/' }];
 
 const checksumUrl = `${repoUrl()}/releases/latest/download/openvault-backup-${PLUGIN_VERSION}.zip.sha256`;
@@ -50,7 +50,7 @@ const steps = [
       <div class="stack">
         <h2 class="sec-title">Requirements</h2>
         <dl class="reqs">
-          <div><dt>WordPress</dt><dd>6.9 or newer</dd></div>
+          <div><dt>WordPress</dt><dd>6.5 or newer</dd></div>
           <div><dt>PHP</dt><dd>7.4 or newer</dd></div>
           <div><dt>Cost</dt><dd>Free, with no paid tiers</dd></div>
         </dl>

@@ -213,7 +213,8 @@ final class TarGzArchiver implements ArchiverInterface {
 
 		clearstatcache( true, $this->path );
 		$size = @filesize( $this->path );
-		$hash = hash_file( 'sha256', $this->path );
+		// A cancel can remove the folder while a slice is still running: report it, do not warn.
+		$hash = is_file( $this->path ) ? hash_file( 'sha256', $this->path ) : false;
 		if ( false === $size || false === $hash || (int) $size !== $this->written ) {
 			throw new ArchiveException( 'The finished archive part could not be read back.' );
 		}

@@ -23,7 +23,7 @@ Only build what belongs to the current phase. Don't implement Phase 2/3 features
 
 ## Tech & conventions
 
-- PHP **7.4+** (no 8.x-only syntax: no enums, readonly, match, named args, union types in signatures), WordPress **6.9+** (raised from 6.0 because the bundled Action Scheduler 4.2.0 requires it).
+- PHP **7.4+** (no 8.x-only syntax: no enums, readonly, match, named args, union types in signatures), WordPress **6.5+** (the lowest version the Docker matrix passes; the floor is set by the bundled Action Scheduler 4.2.0 calling `wp_is_serving_rest_request()`, added in 6.5).
 - Namespace `OpenVault\Backup\`, PSR-4 from `includes/` (e.g. `includes/Engine/JobRunner.php` → `OpenVault\Backup\Engine\JobRunner`).
 - Prefixes: tables `{$wpdb->prefix}ovb_*`, options `ovb_*`, hooks `ovb_*`, constants `OVB_*`, REST namespace `ovb/v1`, text domain `openvault-backup`.
 - Every PHP file starts with `defined( 'ABSPATH' ) || exit;` (except `standalone-restore/restore.php`).

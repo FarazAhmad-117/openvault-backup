@@ -1,8 +1,8 @@
 === OpenVault Backup ===
 Contributors: (your-wporg-username)
 Tags: backup, restore, google drive, s3, scheduled backup
-Requires at least: 6.9
-Tested up to: 6.9
+Requires at least: 6.5
+Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: 0.1.0
 License: GPLv2 or later

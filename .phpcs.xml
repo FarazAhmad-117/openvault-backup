@@ -17,7 +17,7 @@
 	<arg name="parallel" value="8"/>
 
 	<config name="testVersion" value="7.4-"/>
-	<config name="minimum_wp_version" value="6.9"/>
+	<config name="minimum_wp_version" value="6.5"/>
 
 	<rule ref="WordPress">
 		<!-- PSR-4: class files are named after the class, not class-foo.php. -->

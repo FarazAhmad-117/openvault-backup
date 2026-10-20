@@ -26,6 +26,6 @@ A completely free backup plugin where every feature is available to everyone, an
 | D3 | Admin UI tech | Classic PHP pages + small vanilla JS (React optional later) | Confirmed |
 | D4 | Standalone restorer in MVP? | No, Phase 3 | Confirmed |
 | D5 | Cloudinary support | Dropped (free raw-file size limit too small) | Confirmed |
-| D6 | Minimum WordPress | 6.9 (was 6.0) | Changed |
+| D6 | Minimum WordPress | 6.5 (was 6.0, briefly 6.9) | Changed: 6.5 |
 
-**Note on D6:** the bundled Action Scheduler 4.2.0 declares `Requires at least: 6.9`, so the plugin minimum was raised from 6.0 to 6.9. The Docker matrix (`tests/matrix`) also runs WP 6.4 and 6.8 as informational profiles (minimum lowered in a copy of the zip). **Evidence (2026-10-15):** WP 6.8 passes all 57 checks; WP 6.4 fails because Action Scheduler 4.2.0 calls `wp_is_serving_rest_request()`, which exists only from WP 6.5. So the real floor is between 6.5 and 6.8; 6.9 is the conservative, officially declared choice. To lower it, add 6.5/6.6/6.7 profiles first.
+**Note on D6:** the minimum is **6.5**, the lowest version the Docker matrix passes. Action Scheduler 4.2.0 calls `wp_is_serving_rest_request()` (added in WP 6.5), which sets the floor; the plugin's own `%i` placeholder in `$wpdb->prepare` needs 6.2. Action Scheduler's header says `Requires at least: 6.9`, but that is metadata of its standalone plugin; the bundled library works on 6.5 to 6.8. **Evidence:** WP 6.5, 6.6, 6.7, 6.8, 6.9 and 7.1.3 each pass 741/741 matrix checks; WP 6.4 fails 42 checks (`wp_is_serving_rest_request()` is undefined) and stays as the informational `wp64-info` profile.

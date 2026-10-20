@@ -12,7 +12,7 @@ Free, open-source (GPLv2+) WordPress backup plugin. **Bring your own credentials
 | [Download the newest development build (.zip)](../../releases/download/dev/openvault-backup-dev.zip) | Built automatically from `main`. For testers, not for production sites. |
 | [All releases and checksums](../../releases) | Every release has a `.sha256` file next to the zip. |
 
-Requires **WordPress 6.9+** and **PHP 7.4+**.
+Requires **WordPress 6.5+** and **PHP 7.4+**.
 
 > [!WARNING]
 > **Status: pre-alpha (0.1.0).** The plugin creates local backups of your database and files (ZIP or TAR.GZ, resumable, split into parts) and lets you download, lock and delete them. **It cannot restore, run schedules or send backups to Google Drive, S3 or any other remote destination yet.** Backups stay on the same server, so do not rely on it as your only backup. Progress is tracked in `CHANGELOG.md` and `docs/plan/01-scope-and-roadmap.md`.

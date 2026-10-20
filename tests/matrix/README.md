@@ -16,7 +16,7 @@ Needs Docker only (no local PHP). On Windows run it from Git Bash. Logs land in 
 | Axis | Values |
 |---|---|
 | PHP | 7.4, 8.0, 8.1, 8.2, 8.3, 8.4 |
-| WordPress | 6.9 (minimum), latest; 6.8 and 6.4 as *informational* profiles |
+| WordPress | 6.5 (minimum), 6.6, 6.7, 6.8, 6.9, latest; 6.4 as an *informational* profile (known to fail) |
 | Database | MySQL 5.7 / 8.0 / 8.4, MariaDB 10.6 / 10.11 / 11.4 |
 | Host profile | `single`, `multisite`, `restricted` (shell functions disabled, 64 MB, `allow_url_fopen` off), `lowmem` (64 MB, 15 s) |
 

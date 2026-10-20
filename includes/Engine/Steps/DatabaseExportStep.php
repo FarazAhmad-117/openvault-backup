@@ -432,7 +432,7 @@ class DatabaseExportStep implements StepInterface {
 		$size = $writer->bytes();
 		$writer->close();
 
-		$hash = hash_file( 'sha256', $path );
+		$hash = is_file( $path ) ? hash_file( 'sha256', $path ) : false;
 		if ( false === $hash ) {
 			throw new DumpException( 'The checksum of the database dump could not be calculated.' );
 		}

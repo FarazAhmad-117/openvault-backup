@@ -1,17 +1,16 @@
 # id	php	wp	db	variant	informational
 # variant: single | multisite | restricted (disabled shell functions, 64M) | lowmem (64M, 15s)
-# informational=yes: reported but never fails the run (used to gather evidence for lowering the WP minimum)
-min-supported	7.4	6.9	mysql:5.7	single	no
+# informational=yes: reported but never fails the run (wp64-info documents the known failure below the 6.5 floor)
+min-supported	7.4	6.5	mysql:5.7	single	no
+wp66	8.0	6.6	mariadb:10.6	single	no
+wp67	8.1	6.7	mysql:8.0	single	no
+wp68	8.3	6.8	mysql:8.0	single	no
 php80	8.0	6.9	mariadb:10.6	single	no
 php81	8.1	6.9	mysql:8.0	single	no
 php82	8.2	latest	mariadb:10.11	single	no
 php83	8.3	latest	mysql:8.4	single	no
 php84	8.4	latest	mariadb:11.4	single	no
 multisite	8.2	latest	mysql:8.0	multisite	no
-restricted	8.1	6.9	mysql:8.0	restricted	no
-lowmem	7.4	6.9	mariadb:10.6	lowmem	no
-wp67-info	8.2	6.7	mysql:8.0	single	yes
-wp66-info	8.2	6.6	mariadb:10.11	single	yes
-wp65-info	8.1	6.5	mysql:8.0	single	yes
-wp68-info	8.3	6.8	mysql:8.0	single	yes
+restricted	8.1	6.5	mysql:8.0	restricted	no
+lowmem	7.4	6.5	mariadb:10.6	lowmem	no
 wp64-info	8.1	6.4	mysql:8.0	single	yes

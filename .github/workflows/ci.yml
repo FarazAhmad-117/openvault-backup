@@ -61,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        profile: [ min-supported, php80, php81, php82, php83, php84, multisite, restricted, lowmem ]
+        profile: [ min-supported, wp66, wp67, wp68, php80, php81, php82, php83, php84, multisite, restricted, lowmem ]
     steps:
       - uses: actions/checkout@v4
       - run: bash tests/matrix/run.sh ${{ matrix.profile }}
@@ -73,13 +73,13 @@ jobs:
           if-no-files-found: ignore
 
   informational:
-    name: Docker env, older WordPress (informational)
+    name: Docker env, WordPress below the minimum (informational)
     needs: [ quality, unit ]
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - run: bash tests/matrix/run.sh --jobs 2 wp68-info wp64-info
+      - run: bash tests/matrix/run.sh wp64-info
       - uses: actions/upload-artifact@v4
         if: always()
         with:

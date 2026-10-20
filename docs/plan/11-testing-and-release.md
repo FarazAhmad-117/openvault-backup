@@ -6,7 +6,7 @@
 ## Tests
 - **Unit (PHPUnit)**: SigV4 signer, retention policy, manifest parsing, exclusion matching, JobState serialization.
 - **Integration (WP test suite)**: repositories, full backup → restore round trip with Local destination.
-- **Docker environment matrix** (`tests/matrix/`, implemented): installs the built release zip into real WordPress sites across PHP 7.4 to 8.4, WP 6.9 and latest, MySQL 5.7/8.0/8.4 and MariaDB 10.6/10.11/11.4, plus `multisite`, `restricted` (shell functions disabled, 64 MB) and `lowmem` (64 MB, 15 s) host profiles. Runs locally (`composer run test:matrix`) and in CI.
+- **Docker environment matrix** (`tests/matrix/`, implemented): installs the built release zip into real WordPress sites across PHP 7.4 to 8.4, WP 6.5 (minimum) to 6.8, 6.9 and latest (6.4 as an informational profile), MySQL 5.7/8.0/8.4 and MariaDB 10.6/10.11/11.4, plus `multisite`, `restricted` (shell functions disabled, 64 MB) and `lowmem` (64 MB, 15 s) host profiles. Runs locally (`composer run test:matrix`) and in CI.
 - **Still manual**: Nginx; a real cheap shared host; sites of 100 MB, 2 GB, 10 GB.
 - **Destinations**: real Drive (published app), R2, B2.
 

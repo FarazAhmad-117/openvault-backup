@@ -45,7 +45,7 @@ export const faqs: Faq[] = [
   },
   {
     q: 'Which WordPress and PHP versions does it need?',
-    a: 'WordPress 6.9 or newer and PHP 7.4 or newer. The WordPress floor comes from the bundled Action Scheduler 4.2.0, which declares 6.9 as its minimum.',
+    a: 'WordPress 6.5 or newer and PHP 7.4 or newer. It is tested on WordPress 6.5 through the latest release; 6.4 is not supported because the bundled Action Scheduler needs a function added in 6.5.',
   },
   {
     q: 'What happens to my backups if I uninstall the plugin?',

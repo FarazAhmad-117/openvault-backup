@@ -4,7 +4,7 @@
  * Plugin URI:        https://github.com/FarazAhmad-117/openvault-backup
  * Description:       Free, open-source backups. Connect your own Google Drive, S3-compatible or local storage. No relay servers, no paid tiers.
  * Version:           0.1.0
- * Requires at least: 6.9
+ * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            OpenVault contributors
  * License:           GPL-2.0-or-later
@@ -25,7 +25,7 @@ define( 'OVB_FILE', __FILE__ );
 define( 'OVB_PATH', plugin_dir_path( __FILE__ ) );
 define( 'OVB_URL', plugin_dir_url( __FILE__ ) );
 define( 'OVB_MIN_PHP', '7.4' );
-define( 'OVB_MIN_WP', '6.9' );
+define( 'OVB_MIN_WP', '6.5' );
 
 /**
  * Show an admin notice and stop loading when the environment is too old.

@@ -1,7 +1,7 @@
 # Changelog
 ## 0.1.0 - pre-alpha
 - First public pre-alpha. It creates local backups and lets you download them. It does not restore anything yet.
-- Installs on WordPress 6.9+ and PHP 7.4+, creates its own database tables and adds an admin menu. A System Info page reports what your server can do (archive formats, limits, folders).
+- Installs on WordPress 6.5+ and PHP 7.4+, creates its own database tables and adds an admin menu. A System Info page reports what your server can do (archive formats, limits, folders).
 - Back up now: choose database and files, pick ZIP (deflate), ZIP (store) or TAR.GZ (only formats your server supports are offered), and watch live progress with a cancel button.
 - Built for cheap hosting: backups run in small resumable slices, survive timeouts and crashes, and split into parts (250 MB by default). Every backup writes a manifest.json next to its archives.
 - Backups page: list your backups, download them through an authenticated link, lock a backup against deletion, delete or cancel one.
@@ -19,7 +19,7 @@
 - Admin menu with all ten pages as "coming soon" placeholders; the System Info page shows real environment data with a copyable report.
 - `Support\Logger` (secret redaction, minimum level filter) and `Database\LogsRepository`.
 - Unit tests for `Logger`, `Installer` and `SystemInfo`.
-- Minimum WordPress raised from 6.0 to 6.9 (required by the bundled Action Scheduler 4.2.0).
+- Minimum WordPress set to 6.5 (was 6.0). The Docker matrix passes on 6.5 to 6.8, 6.9 and the latest release; 6.4 fails because the bundled Action Scheduler 4.2.0 calls `wp_is_serving_rest_request()`, added in WordPress 6.5. Matrix profiles `wp66`, `wp67` and `wp68` now gate CI.
 - Installable zip: `bin/build-zip.sh` + `.distignore`; GitHub Actions publish releases on tags, a rolling `dev` build from `main`, and run CI.
 - Marketing website in `website/` (Astro, 28 pages, Vercel-ready): home, features, roadmap, download, security, FAQ, changelog, Google Drive, S3-compatible provider pages, docs from `docs/guides`, comparison and restore pages. Honest per-feature status badges; unconfigured builds are `noindex`. Quality gates: tests, links, axe, Lighthouse, social images.
 - Docker environment matrix (`tests/matrix/`): installs the built zip across PHP, WordPress, database and host profiles.
