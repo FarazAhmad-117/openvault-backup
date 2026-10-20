@@ -39,6 +39,10 @@ wps config create --dbname=wp --dbuser=root --dbpass=root --dbhost="$DB_HOST" --
 define( 'WP_DEBUG', true );
 define( 'WP_DEBUG_LOG', true );
 define( 'WP_DEBUG_DISPLAY', false );
+// An old test WordPress must stay the version under test: with network access (CI) its background updater would
+// replace core files mid-run and produce mixed-version fatals ("Cannot redeclare absint()").
+define( 'AUTOMATIC_UPDATER_DISABLED', true );
+define( 'WP_AUTO_UPDATE_CORE', false );
 PHP
 
 step "install WordPress ($VARIANT)"
