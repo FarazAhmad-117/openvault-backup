@@ -336,6 +336,28 @@ class DestinationsRepository {
 	}
 
 	/**
+	 * Forget the last test (settings changed, so "connected" would no longer be true): status new, no error, no test time.
+	 * A destination that needs to be reconnected keeps that status.
+	 *
+	 * @param int $id Destination id.
+	 * @return bool
+	 */
+	public function mark_untested( $id ) {
+		$row = $this->find( $id );
+		if ( null === $row || self::STATUS_NEEDS_RECONNECT === $row['status'] ) {
+			return null !== $row;
+		}
+		return $this->update_columns(
+			$id,
+			array(
+				'status'         => self::STATUS_NEW,
+				'last_error'     => null,
+				'last_tested_at' => null,
+			)
+		);
+	}
+
+	/**
 	 * Delete a destination. Its backup_files rows are left alone (they record what was uploaded there).
 	 *
 	 * @param int $id Destination id.

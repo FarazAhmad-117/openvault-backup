@@ -253,6 +253,38 @@ class RestControllerTest extends TestCase {
 		$this->assertSame( 0, $data['percent'] );
 	}
 
+	public function test_destinations_argument_validation() {
+		$this->assertTrue( R::validate_destinations( array() ) );
+		$this->assertTrue( R::validate_destinations( array( 1, '2', 3 ) ) );
+		$this->assertTrue( R::validate_destinations( range( 1, 10 ) ) );
+		foreach ( array( range( 1, 11 ), array( 0 ), array( -3 ), array( '1x' ), array( '01' ), array( 1.5 ), array( null ), array( array( 1 ) ), array( true ), 'all', 5, null, array( '99999999999' ), array( '1 OR 1=1' ) ) as $bad ) {
+			$this->assertFalse( R::validate_destinations( $bad ), var_export( $bad, true ) );
+		}
+	}
+
+	public function test_destinations_are_sanitised_to_unique_integers() {
+		$this->assertSame( array( 3, 1, 2 ), R::sanitize_destinations( array( '3', 1, 3, '2', 1 ) ) );
+		$this->assertSame( array(), R::sanitize_destinations( 'x' ) );
+		$this->assertSame( array(), R::sanitize_destinations( array( 0, -1 ) ) );
+	}
+
+	public function test_payload_carries_the_destination_summary() {
+		$state   = JobState::new_state( JobState::STEP_UPLOAD, 1 );
+		$summary = array(
+			array(
+				'id'          => 4,
+				'label'       => 'Disk',
+				'status'      => 'done',
+				'files_done'  => 3,
+				'files_total' => 3,
+				'error'       => '',
+			),
+		);
+		$data    = R::payload( $this->row( 'uploading' ), $state, array(), 5, null, array(), $summary );
+		$this->assertSame( $summary, $data['destinations'] );
+		$this->assertSame( array(), R::payload( $this->row( 'uploading' ), $state, array(), 5 )['destinations'] );
+	}
+
 	public function test_payload_never_exposes_state_internals() {
 		$state = JobState::new_state( JobState::STEP_ARCHIVE, 1 )->with_cursor(
 			array(

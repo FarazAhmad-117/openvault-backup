@@ -159,3 +159,116 @@
 .ovb-wrap [hidden] {
 	display: none !important;
 }
+
+/* Destinations: one card per configured destination. */
+.ovb-card {
+	margin: 0 0 12px;
+	padding: 8px 16px 12px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+}
+
+.ovb-card-title {
+	margin: 8px 0 4px;
+	font-size: 15px;
+}
+
+.ovb-card-title .ovb-status {
+	margin-left: 6px;
+	vertical-align: middle;
+}
+
+.ovb-card-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 8px 0 0;
+}
+
+.ovb-card .ovb-dest-details {
+	overflow-wrap: anywhere;
+}
+
+.ovb-dest-error {
+	margin: 4px 0;
+	color: #b32d2e;
+	overflow-wrap: anywhere;
+}
+
+.ovb-dest-result {
+	min-height: 1.4em;
+	margin: 4px 0;
+	font-weight: 600;
+	overflow-wrap: anywhere;
+}
+
+.ovb-dest-result.is-ok {
+	color: #006908;
+}
+
+.ovb-dest-result.is-bad {
+	color: #b32d2e;
+}
+
+.ovb-status--connected {
+	color: #006908;
+	background: #edfaef;
+}
+
+.ovb-status--error {
+	color: #b32d2e;
+	background: #fcf0f1;
+}
+
+.ovb-status--needs_reconnect {
+	color: #7a4d00;
+	background: #fcf9e8;
+}
+
+.ovb-status--new {
+	color: #50575e;
+	background: #f6f7f7;
+}
+
+.ovb-help--flush {
+	margin-left: 0;
+}
+
+.ovb-preset-info {
+	margin: 0 0 12px;
+	padding: 4px 12px;
+	background: #f6f7f7;
+	border-left: 4px solid #2271b1;
+	overflow-wrap: anywhere;
+}
+
+.ovb-needs,
+.ovb-safety {
+	margin: 0 0 12px 18px;
+	list-style: disc;
+}
+
+.ovb-advanced {
+	margin: 0 0 16px;
+}
+
+.ovb-advanced summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+
+.ovb-more {
+	margin-top: 16px;
+}
+
+.ovb-wrap input[type="text"],
+.ovb-wrap input[type="url"],
+.ovb-wrap input[type="password"] {
+	max-width: 100%;
+}
+
+/* Fieldsets default to min-width: min-content, which pushed them past the panel on narrow screens. */
+.ovb-fieldset {
+	min-width: 0;
+	box-sizing: border-box;
+}

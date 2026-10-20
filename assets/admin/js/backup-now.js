@@ -142,6 +142,42 @@
 		announce( data.step_label || '' );
 	}
 
+	// One line per destination: its name and the result as text.
+	function showSent( destinations ) {
+		var box = document.getElementById( 'ovb-sent' );
+		var ul = document.getElementById( 'ovb-sent-list' );
+		var names = { done: t.sent_done, failed: t.sent_failed, uploading: t.sent_active, pending: t.sent_pending };
+		var i;
+		var li;
+		var line;
+		ul.innerHTML = '';
+		for ( i = 0; i < destinations.length; i++ ) {
+			line = destinations[ i ].label + ': ' + ( names[ destinations[ i ].status ] || destinations[ i ].status );
+			if ( destinations[ i ].files_total > 0 ) {
+				line += ' (' + destinations[ i ].files_done + '/' + destinations[ i ].files_total + ')';
+			}
+			if ( destinations[ i ].status === 'failed' && destinations[ i ].error ) {
+				line += ' - ' + destinations[ i ].error;
+			}
+			li = document.createElement( 'li' );
+			li.textContent = line;
+			ul.appendChild( li );
+		}
+		show( box, destinations.length > 0 );
+	}
+
+	function selectedDestinations() {
+		var boxes = form.querySelectorAll( '[data-ovb-destination]' );
+		var ids = [];
+		var i;
+		for ( i = 0; i < boxes.length; i++ ) {
+			if ( boxes[ i ].checked && ! boxes[ i ].disabled ) {
+				ids.push( parseInt( boxes[ i ].getAttribute( 'data-ovb-destination' ), 10 ) );
+			}
+		}
+		return ids;
+	}
+
 	function finish( data ) {
 		finished = true;
 		window.clearInterval( tickTimer );
@@ -177,6 +213,7 @@
 			text.textContent = data.error || data.message || '';
 			list.innerHTML = '';
 		}
+		showSent( data.destinations || [] );
 		show( summary, true );
 		announce( title.textContent );
 		if ( title.focus ) {
@@ -249,6 +286,7 @@
 		if ( chosen ) {
 			body.format = chosen.value;
 		}
+		body.destinations = selectedDestinations();
 		var button = document.getElementById( 'ovb-start' );
 		button.disabled = true;
 		announce( t.starting );

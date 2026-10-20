@@ -23,7 +23,7 @@ const { provider, prev, next } = Astro.props;
 const path = `/s3-r2/${provider.slug}/`;
 const status = statusOf('destination-s3');
 const trail = [{ name: 'Home', path: '/' }, { name: 'S3 & R2', path: '/s3-r2/' }, { name: provider.name, path }];
-const description = `How OpenVault Backup is designed to back up WordPress to ${provider.name} with your own bucket and keys: endpoint, region and what you need. Not working yet.`;
+const description = `Back up WordPress to ${provider.name} with your own bucket and keys: endpoint, region and what you need. Pre-alpha, not live-tested here.`;
 const entry = provider.guideId ? await getEntry('guides', provider.guideId) : undefined;
 const Content = entry ? (await render(entry)).Content : null;
 const outlineHref = provider.guideId ? guideHref(provider.guideId) : undefined;
@@ -33,15 +33,15 @@ const others = providers.filter((p) => p.slug !== provider.slug);
 
 <Base title={`Back up WordPress to ${provider.name}`} description={description} path={path} jsonLd={[faqPage(provider.faq), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb={provider.name} path={path} title={`Back up WordPress to ${provider.name}`} trail={[{ name: 'S3 & R2', href: '/s3-r2/' }]}>
-    <p>OpenVault Backup is being built to send backups to your own {provider.name} bucket, through the same S3-compatible signer it uses for every provider.</p>
-    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: {provider.name} does not work yet. This page describes the design.</span></p>
+    <p>OpenVault Backup can send backups to your own {provider.name} bucket, through the same S3-compatible signer it uses for every provider.</p>
+    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: available in 0.2.0, but not tested live against {provider.name}.</span></p>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
       <div class="warn-box" role="note">
-        <h2>Not working yet</h2>
-        <p>The plugin cannot connect to {provider.name}, back up or restore today. Do not rely on it, and do not delete any other backup because of it.</p>
+        <h2>Available in 0.2.0 (pre-alpha), untested against {provider.name}</h2>
+        <p>The plugin can send backups to an S3-compatible bucket. It was tested live against one S3-compatible server (SeaweedFS). {provider.name} is covered by unit tests and the endpoint pattern in its own documentation, not by real calls, so please report problems. It cannot restore a backup, run schedules or delete old backups yet. Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
       </div>
 
       <div class="two">
@@ -73,7 +73,7 @@ const others = providers.filter((p) => p.slug !== provider.slug);
         <ul role="list" class="need">
           {provider.needs.map((n) => <li>{n}</li>)}
         </ul>
-        <p class="small muted">Also in the plugin: a private bucket, an optional folder prefix, and a Test connection step. Give the key only list, put, get and delete on that one bucket.</p>
+        <p class="small muted">In the plugin: a private bucket, an optional folder prefix, and a Test connection button. Give the key only list, put, get and delete on that one bucket.</p>
       </div>
       <div class="stack-lg">
         <h2 class="sec-title">Questions</h2>
@@ -92,7 +92,7 @@ const others = providers.filter((p) => p.slug !== provider.slug);
     <section class="section" id="setup-outline">
       <div class="container stack-lg">
         <h2 class="sec-title">Setup outline</h2>
-        <OutlineNotice status={status} />
+        <OutlineNotice status={status} message="This guide is still a short outline, without screenshots. The Destinations page in the plugin (0.2.0, pre-alpha) already lets you follow these steps, but only SeaweedFS has been tested against a real server, so details for your provider may differ. Please report problems." />
         <GuideProse><Content /></GuideProse>
       </div>
     </section>

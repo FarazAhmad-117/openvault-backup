@@ -12,12 +12,12 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'How it works', path: '/how-
 const flow = [
   {
     title: 'Connect your storage',
-    text: 'Add your own Google Drive OAuth app or your own S3-compatible keys, or choose a protected folder on your server. The plugin talks to your storage directly, with no relay in between.',
+    text: 'Add your own S3-compatible keys or choose a folder on your server today; your own Google Drive OAuth app is planned. The plugin talks to your storage directly, with no relay in between.',
     badges: [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3'], ['Local', 'destination-local']],
   },
   {
     title: 'Choose what and when',
-    text: 'Pick the database, plugins, themes, uploads and more, set exclusions, then back up by hand or on schedules powered by Action Scheduler.',
+    text: 'Pick the database, plugins, themes, uploads and more and back up by hand, choosing where the copy goes. Exclusions and schedules powered by Action Scheduler are planned.',
     badges: [['Manual', 'backup-manual'], ['Scheduled', 'backup-scheduled']],
   },
   {
@@ -27,8 +27,8 @@ const flow = [
   },
   {
     title: 'Upload, with a manifest',
-    text: 'Archives are saved in parts, with a manifest.json written next to every backup so a fresh install can rediscover it. Uploading the parts to a remote destination, with retries, is planned.',
-    badges: [['Parts and manifest', 'backup-manual'], ['Remote upload', 'destination-s3']],
+    text: 'Archives are saved in parts, with a manifest.json written next to every backup. The parts are then sent to each destination you chose, large ones in resumable pieces with retries; a failed destination ends the backup as partial and never stops the others. Rediscovering backups on a fresh install is planned.',
+    badges: [['Parts and manifest', 'backup-manual'], ['S3-compatible upload', 'destination-s3'], ['Local folder copy', 'destination-local']],
   },
   {
     title: 'Apply retention',

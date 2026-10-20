@@ -10,7 +10,10 @@
  * the REST API (POST /backups), polls GET /backups/{id}/progress and shows the result. If a backup is already
  * running when the page loads, the form is replaced by its progress. Only formats the server supports are
  * offered (Archive\CapabilityDetector); a format that is not available is listed disabled with the reason.
- * Destinations arrive in a later milestone: today a backup is stored in the local backup folder only.
+ * Where to send it: the configured destinations (Destinations page) are listed as checkboxes; the script sends the
+ * checked ids as "destinations" and shows the per-destination result in the summary. New and connected destinations
+ * can be selected; one that failed its last test or needs its keys entered again is shown disabled with the reason and
+ * a link to the Destinations page. A copy always stays in the local backup folder.
  *
  * @package OpenVault\Backup
  */
@@ -20,6 +23,9 @@ namespace OpenVault\Backup\Admin\Pages;
 use OpenVault\Backup\Admin\Menu;
 use OpenVault\Backup\Archive\CapabilityDetector;
 use OpenVault\Backup\Database\BackupsRepository;
+use OpenVault\Backup\Database\DestinationsRepository;
+use OpenVault\Backup\Destinations\DestinationPresenter;
+use OpenVault\Backup\Destinations\DestinationRegistry;
 use OpenVault\Backup\Rest\RestController;
 
 defined( 'ABSPATH' ) || exit;
@@ -95,7 +101,7 @@ class BackupNowPage extends AbstractPage {
 		$detector = new CapabilityDetector();
 		$default  = $detector->default_format();
 
-		echo '<p>' . esc_html__( 'Create a backup of this site now. It is stored in the protected backup folder on this server. A backup keeps running in the background if you close this page.', 'openvault-backup' ) . '</p>';
+		echo '<p>' . esc_html__( 'Create a backup of this site now. A copy is always stored in the protected backup folder on this server. A backup keeps running in the background if you close this page.', 'openvault-backup' ) . '</p>';
 
 		if ( null === $default ) {
 			echo '<div class="notice notice-error inline"><p>' . esc_html__( 'No archive format is available on this server, so backups cannot be created. Open System Info to see which PHP extensions are missing.', 'openvault-backup' ) . '</p></div>';
@@ -123,12 +129,45 @@ class BackupNowPage extends AbstractPage {
 		}
 		echo '</fieldset>';
 
+		$this->render_destinations();
+
 		echo '<p class="ovb-option"><label for="ovb-note"><strong>' . esc_html__( 'Note (optional)', 'openvault-backup' ) . '</strong></label><br>';
 		echo '<input type="text" id="ovb-note" class="regular-text" maxlength="' . esc_attr( (string) RestController::NOTE_MAX ) . '" aria-describedby="ovb-note-help"> ';
 		echo '<span class="description ovb-help" id="ovb-note-help">' . esc_html__( 'A reminder shown in the backup list, for example "before the theme update".', 'openvault-backup' ) . '</span></p>';
 
 		echo '<p><button type="submit" class="button button-primary button-hero" id="ovb-start"' . disabled( null === $default, true, false ) . '>' . esc_html__( 'Back up now', 'openvault-backup' ) . '</button></p>';
 		echo '</form>';
+	}
+
+	/**
+	 * The "Where to send it" fieldset.
+	 *
+	 * @return void
+	 */
+	private function render_destinations() {
+		$registry = new DestinationRegistry();
+		$link     = '<a href="' . esc_url( Menu::url( 'openvault-destinations' ) ) . '">' . esc_html__( 'Destinations page', 'openvault-backup' ) . '</a>';
+
+		echo '<fieldset class="ovb-fieldset" id="ovb-destinations-box"><legend>' . esc_html__( 'Where to send it', 'openvault-backup' ) . '</legend>';
+		echo '<p class="description">' . esc_html__( 'A copy always stays in the local backup folder on this server.', 'openvault-backup' ) . '</p>';
+
+		$rows = ( new DestinationsRepository() )->all();
+		if ( array() === $rows ) {
+			/* translators: %s: link to the Destinations page. */
+			echo '<p>' . sprintf( esc_html__( 'No other destination is set up. To also send backups to cloud storage, add one on the %s.', 'openvault-backup' ), $link ) . '</p></fieldset>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $link is built from escaped parts.
+			return;
+		}
+
+		foreach ( $rows as $row ) {
+			$item   = DestinationPresenter::item( $row );
+			$id     = esc_attr( (string) $item['id'] );
+			$reason = DestinationPresenter::unusable_reason( $item, $registry->has( $item['type'] ) );
+			$kind   = '' !== $item['preset_label'] ? $item['preset_label'] : $item['type_label'];
+			echo '<p class="ovb-option"><label for="ovb-d-' . $id . '"><input type="checkbox" id="ovb-d-' . $id . '" name="destinations[]" value="' . $id . '" data-ovb-destination="' . $id . '" aria-describedby="ovb-dh-' . $id . '"' . disabled( '' !== $reason, true, false ) . '> <strong>' . esc_html( $item['label'] ) . '</strong></label>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $id is escaped above.
+			echo '<span class="description ovb-help" id="ovb-dh-' . $id . '">' . esc_html( $kind . ' - ' . $item['status_label'] . ( '' === $reason ? '' : '. ' . $reason ) ) . '</span></p>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $id is escaped above.
+		}
+		/* translators: %s: link to the Destinations page. */
+		echo '<p class="description">' . sprintf( esc_html__( 'Add, test or fix destinations on the %s.', 'openvault-backup' ), $link ) . '</p></fieldset>'; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- $link is built from escaped parts.
 	}
 
 	/**
@@ -149,6 +188,7 @@ class BackupNowPage extends AbstractPage {
 
 		echo '<div id="ovb-summary" class="ovb-summary" hidden>';
 		echo '<h3 id="ovb-summary-title"></h3><p id="ovb-summary-text"></p><ul id="ovb-downloads" class="ovb-downloads-list"></ul>';
+		echo '<div id="ovb-sent" hidden><h4>' . esc_html__( 'Where it was sent', 'openvault-backup' ) . '</h4><ul id="ovb-sent-list" class="ovb-downloads-list"></ul></div>';
 		echo '<p><a class="button button-primary" href="' . esc_url( Menu::url( 'openvault-backups' ) ) . '">' . esc_html__( 'Go to backup history', 'openvault-backup' ) . '</a> ';
 		echo '<a class="button" id="ovb-again" href="' . esc_url( Menu::url( 'openvault-backup-now' ) ) . '">' . esc_html__( 'Back up again', 'openvault-backup' ) . '</a></p>';
 		echo '</div>';

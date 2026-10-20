@@ -54,6 +54,47 @@ final class BackupRowPresenter {
 	}
 
 	/**
+	 * Translated status of an upload to one destination (text, never colour alone).
+	 *
+	 * @param string $status done, failed, uploading or pending.
+	 * @return string
+	 */
+	public static function upload_status_label( $status ) {
+		switch ( $status ) {
+			case 'done':
+				return __( 'Uploaded', 'openvault-backup' );
+			case 'failed':
+				return __( 'Failed', 'openvault-backup' );
+			case 'uploading':
+				return __( 'Uploading', 'openvault-backup' );
+		}
+		return __( 'Waiting', 'openvault-backup' );
+	}
+
+	/**
+	 * One compact line for the destinations of a backup, for example "Backup disk: Uploaded; Spare: Failed (2 of 3 files)".
+	 *
+	 * @param array<int,array<string,mixed>> $summary Entries of UploadSummary::summarise().
+	 * @return string '' when the backup has no remote destination.
+	 */
+	public static function destinations_line( array $summary ) {
+		$parts = array();
+		foreach ( $summary as $entry ) {
+			$text = (string) $entry['label'] . ': ' . self::upload_status_label( (string) $entry['status'] );
+			if ( 'done' !== $entry['status'] && (int) $entry['files_total'] > 0 ) {
+				$text .= ' ' . sprintf(
+					/* translators: 1: files uploaded, 2: total files. */
+					__( '(%1$d of %2$d files)', 'openvault-backup' ),
+					(int) $entry['files_done'],
+					(int) $entry['files_total']
+				);
+			}
+			$parts[] = $text;
+		}
+		return implode( '; ', $parts );
+	}
+
+	/**
 	 * Translated trigger label.
 	 *
 	 * @param string $trigger Trigger type.

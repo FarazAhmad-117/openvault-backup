@@ -8,7 +8,7 @@ const preAlpha = PLUGIN_VERSION.startsWith('0.');
 
 <div class="dl">
   <a class={`btn btn--${variant}`} href={downloadUrl()} rel="noopener">Download for WordPress (.zip)</a>
-  {preAlpha && <p class="note muted small">Pre-alpha {PLUGIN_VERSION} (local backups only: no restore, schedules or off-site storage yet)</p>}
+  {preAlpha && <p class="note muted small">Pre-alpha {PLUGIN_VERSION} (backups to your server, S3-compatible storage or a folder: no restore, schedules or Google Drive yet)</p>}
 </div>
 
 <style>

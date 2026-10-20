@@ -37,6 +37,7 @@ use OpenVault\Backup\Engine\Steps\DatabaseExportStep;
 use OpenVault\Backup\Engine\Steps\FileScanStep;
 use OpenVault\Backup\Engine\Steps\PreflightStep;
 use OpenVault\Backup\Engine\Steps\StepInterface;
+use OpenVault\Backup\Engine\Steps\UploadStep;
 use OpenVault\Backup\Support\Logger;
 use OpenVault\Backup\Support\Paths;
 
@@ -198,17 +199,18 @@ class JobRunner {
 	/**
 	 * Start a backup that already has a row: save a fresh state, mark it running and queue the first slice.
 	 *
-	 * @param int $backup_id Backup id.
+	 * @param int                 $backup_id Backup id.
+	 * @param array<string,mixed> $meta      Job meta to start with: "destinations" (list of destination ids) selects where the upload step sends the backup.
 	 * @return bool False when the backup does not exist or the job could not be queued.
 	 */
-	public function start( int $backup_id ) {
+	public function start( int $backup_id, array $meta = array() ) {
 		$backup = $this->backups->find( $backup_id );
 		if ( null === $backup ) {
 			return false;
 		}
 
 		// State first: a "queued" row without state is never touched by recover_stalled().
-		$this->persist( $backup_id, JobState::new_state( JobState::STEP_PREFLIGHT ) );
+		$this->persist( $backup_id, JobState::new_state( JobState::STEP_PREFLIGHT )->with_meta( $meta ) );
 		$this->backups->update_status( $backup_id, 'running' );
 		$this->logger->info( __( 'Backup started.', 'openvault-backup' ), array( 'format' => $backup['format'] ), $backup_id );
 
@@ -351,7 +353,7 @@ class JobRunner {
 	}
 
 	/**
-	 * The step implementations by id (preflight, db_export, file_scan, archive and cleanup so far). Filter "ovb_engine_steps" may add, replace or remove steps.
+	 * The step implementations by id (preflight, db_export, file_scan, archive, upload and cleanup so far). Filter "ovb_engine_steps" may add, replace or remove steps.
 	 * A step id without an implementation is skipped by the runner.
 	 *
 	 * @return array<string,StepInterface>
@@ -362,6 +364,7 @@ class JobRunner {
 			JobState::STEP_DB_EXPORT => new DatabaseExportStep(),
 			JobState::STEP_FILE_SCAN => new FileScanStep(),
 			JobState::STEP_ARCHIVE   => new ArchiveStep(),
+			JobState::STEP_UPLOAD    => new UploadStep(),
 			JobState::STEP_CLEANUP   => new CleanupStep(),
 		);
 

@@ -5,7 +5,7 @@ import DownloadButton from '../components/DownloadButton.astro';
 import { PLUGIN_VERSION, repoUrl, devDownloadUrl, siteUrl } from '../config/site';
 import { howTo, breadcrumbs } from '../lib/jsonld';
 
-const description = 'Download OpenVault Backup, a free GPLv2 WordPress plugin. Pre-alpha: local backups only, no restore yet. Requires WordPress 6.5+ and PHP 7.4+.';
+const description = 'Download OpenVault Backup, a free GPLv2 WordPress plugin. Pre-alpha: backs up to S3 or a folder, no restore yet. WordPress 6.5+, PHP 7.4+.';
 const trail = [{ name: 'Home', path: '/' }, { name: 'Download', path: '/download/' }];
 
 const checksumUrl = `${repoUrl()}/releases/latest/download/openvault-backup-${PLUGIN_VERSION}.zip.sha256`;
@@ -29,7 +29,7 @@ const steps = [
     <div class="container stack-lg">
       <div class="warn-box" role="note">
         <h2>Pre-alpha: do not rely on it</h2>
-        <p>This build can create local backups of your database and files and let you download them. It cannot restore a backup, run schedules or send backups to Google Drive or S3 yet, and backups stay on the same server, so they do not protect you if you lose it. Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
+        <p>This build backs up your database and files, keeps a copy on your server and can also send it to S3-compatible storage or another folder. It cannot restore a backup, run schedules, delete old backups, send backups to Google Drive or encrypt archives yet, and a downloaded or off-site backup can only be unpacked by hand. S3 was verified live against one server only (SeaweedFS). Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
       </div>
 
       <div class="get">
@@ -76,7 +76,7 @@ const steps = [
   <section class="section">
     <div class="container stack">
       <h2 class="sec-title">What you will see after installing</h2>
-      <p class="muted">The admin menu, a Back up now page (database and files, ZIP or TAR.GZ), a Backups page to download, lock or delete them, and a System Info page. Restore, schedules and off-site destinations are not built yet; a backup can only be downloaded and unpacked by hand. Follow progress on the <a class="link" href="/roadmap/">roadmap</a> or the <a class="link" href="/changelog/">changelog</a>.</p>
+      <p class="muted">The admin menu, a Back up now page (database and files, ZIP or TAR.GZ, with a choice of destinations), a Destinations page for S3-compatible storage and local folders, a Backups page to download, lock or delete them, and a System Info page. Restore, schedules, retention and Google Drive are not built yet; a backup can only be downloaded and unpacked by hand. Follow progress on the <a class="link" href="/roadmap/">roadmap</a> or the <a class="link" href="/changelog/">changelog</a>.</p>
     </div>
   </section>
 </Base>

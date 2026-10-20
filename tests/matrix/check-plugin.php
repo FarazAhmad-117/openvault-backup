@@ -727,9 +727,9 @@ try {
 	unlink( $outside . '/precious.txt' );
 	rmdir( $outside );
 
-	// 12h. Default step map: preflight, db_export, file_scan, archive and cleanup are real, the others are skipped for now; the job completes.
+	// 12h. Default step map: preflight, db_export, file_scan, archive, upload (skipped without destinations) and cleanup are real, encrypt and retention are skipped for now; the job completes.
 	$default_map = $plain->steps();
-	ovb_check( 'engine: default step map holds the implemented steps', isset( $default_map['preflight'], $default_map['db_export'], $default_map['file_scan'], $default_map['archive'], $default_map['cleanup'] ) && $default_map['preflight'] instanceof PreflightStep && $default_map['db_export'] instanceof \OpenVault\Backup\Engine\Steps\DatabaseExportStep && $default_map['file_scan'] instanceof \OpenVault\Backup\Engine\Steps\FileScanStep && $default_map['archive'] instanceof \OpenVault\Backup\Engine\Steps\ArchiveStep && $default_map['cleanup'] instanceof CleanupStep && 5 === count( $default_map ) );
+	ovb_check( 'engine: default step map holds the implemented steps', isset( $default_map['preflight'], $default_map['db_export'], $default_map['file_scan'], $default_map['archive'], $default_map['upload'], $default_map['cleanup'] ) && $default_map['preflight'] instanceof PreflightStep && $default_map['db_export'] instanceof \OpenVault\Backup\Engine\Steps\DatabaseExportStep && $default_map['file_scan'] instanceof \OpenVault\Backup\Engine\Steps\FileScanStep && $default_map['archive'] instanceof \OpenVault\Backup\Engine\Steps\ArchiveStep && $default_map['upload'] instanceof \OpenVault\Backup\Engine\Steps\UploadStep && $default_map['cleanup'] instanceof CleanupStep && 6 === count( $default_map ) );
 	$job = $new_job( 'default' );
 	$ebackups->save_state( $job, JobState::new_state( 'preflight' ) );
 	$ebackups->update_status( $job, 'running' );
@@ -2255,6 +2255,1151 @@ $arc_leftovers = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$o
 	+ count( glob( Paths::backups_dir() . '/*', GLOB_ONLYDIR ) ?: array() )
 	+ (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'ovb\\_lock\\_%'" );
 ovb_check( 'file scan and archive: fixture, backup folders, work folders, rows and locks cleaned up', 0 === $arc_leftovers, "leftovers: $arc_leftovers" );
+
+// 15. Destinations and the upload step (Milestone 4, step 4a): a Local destination in a custom folder, a destination that always
+// fails (with a secret in its error), one that fails twice and then works, one that needs a reconnect and one on the plugin's own
+// folder. Real backups run through the JobRunner; the upload step gets a 2 MB budget per slice. Everything created here is removed again.
+use OpenVault\Backup\Database\DestinationsRepository;
+use OpenVault\Backup\Destinations\DestinationException;
+use OpenVault\Backup\Destinations\DestinationInterface;
+use OpenVault\Backup\Destinations\DestinationRegistry;
+use OpenVault\Backup\Destinations\Local\LocalDestination;
+use OpenVault\Backup\Destinations\RemotePath;
+use OpenVault\Backup\Destinations\TestResult;
+
+if ( ! class_exists( 'OvbFailingDestination' ) ) {
+	class OvbFailingDestination implements DestinationInterface {
+		public function __construct( array $settings = array(), array $credentials = array() ) {
+		}
+		public function id() {
+			return 'failing';
+		}
+		public function label() {
+			return 'Failing';
+		}
+		public function test_connection() {
+			return TestResult::failure( 'No.' );
+		}
+		public function begin_upload( $remote_path, $size, array $options = array() ) {
+			return array( 'v' => 1 );
+		}
+		public function upload_chunk( array $session, $local_file, Budget $budget ) {
+			throw DestinationException::transient( 'Server said: Authorization: Bearer ovb-secret-xyz-123456 was rejected' );
+		}
+		public function abort_upload( array $session ) {
+		}
+		public function download( $remote_ref, callable $sink ) {
+			throw DestinationException::permanent( 'No.' );
+		}
+		public function delete( $remote_ref ) {
+			throw DestinationException::permanent( 'No.' );
+		}
+		public function list( $remote_prefix = '', $limit = 10000 ) {
+			return array();
+		}
+		public function quota() {
+			return null;
+		}
+		public function remote_root() {
+			return RemotePath::ROOT;
+		}
+	}
+
+	class OvbFlakyDestination implements DestinationInterface {
+		private $inner;
+		public function __construct( LocalDestination $inner ) {
+			$this->inner = $inner;
+		}
+		public function id() {
+			return 'flaky';
+		}
+		public function label() {
+			return 'Flaky';
+		}
+		public function test_connection() {
+			return $this->inner->test_connection();
+		}
+		public function begin_upload( $remote_path, $size, array $options = array() ) {
+			return $this->inner->begin_upload( $remote_path, $size, $options );
+		}
+		public function upload_chunk( array $session, $local_file, Budget $budget ) {
+			if ( $GLOBALS['ovb_flaky_left'] > 0 ) {
+				--$GLOBALS['ovb_flaky_left'];
+				throw DestinationException::transient( 'Temporary glitch' );
+			}
+			return $this->inner->upload_chunk( $session, $local_file, $budget );
+		}
+		public function abort_upload( array $session ) {
+			$this->inner->abort_upload( $session );
+		}
+		public function download( $remote_ref, callable $sink ) {
+			$this->inner->download( $remote_ref, $sink );
+		}
+		public function delete( $remote_ref ) {
+			$this->inner->delete( $remote_ref );
+		}
+		public function list( $remote_prefix = '', $limit = 10000 ) {
+			return $this->inner->list( $remote_prefix, $limit );
+		}
+		public function quota() {
+			return $this->inner->quota();
+		}
+		public function remote_root() {
+			return $this->inner->remote_root();
+		}
+	}
+
+	/** Runs the real upload step with a 2 MB budget per slice and lets the test look at (and disturb) the state after each slice. */
+	class OvbUploadObserver implements StepInterface {
+		public $inner;
+		public $observe;
+		public function __construct( StepInterface $inner, $observe ) {
+			$this->inner   = $inner;
+			$this->observe = $observe;
+		}
+		public function id() {
+			return $this->inner->id();
+		}
+		public function run( JobContext $context ) {
+			$tick   = 0.0;
+			$tiny   = new Budget(
+				2,
+				PHP_INT_MAX,
+				static function () use ( &$tick ) {
+					$tick += 1.0;
+					return $tick;
+				}
+			);
+			$inner  = new JobContext( $context->backup(), $context->state(), $tiny, $context->logger(), $context->work_dir(), $context->settings() );
+			$result = $this->inner->run( $inner );
+			++$GLOBALS['ovb_up_slices'];
+			$GLOBALS['ovb_up_kinds'][] = $result->kind();
+			call_user_func( $this->observe, $context );
+			return $result;
+		}
+	}
+}
+
+function ovb_up_files_below( $dir ) {
+	$out = array();
+	if ( ! is_dir( $dir ) ) {
+		return $out;
+	}
+	$it = new RecursiveIteratorIterator( new RecursiveDirectoryIterator( $dir, FilesystemIterator::SKIP_DOTS ) );
+	foreach ( $it as $item ) {
+		$out[] = str_replace( '\\', '/', substr( $item->getPathname(), strlen( $dir ) + 1 ) );
+	}
+	sort( $out );
+	return $out;
+}
+
+$ovb_up_backup_ids = array();
+$ovb_up_dest_ids   = array();
+$ovb_up_settings   = get_option( 'ovb_settings' );
+$ovb_up_observer   = null;
+$ovb_up_hook       = static function ( $steps ) use ( &$ovb_up_observer ) {
+	if ( null !== $ovb_up_observer && isset( $steps['upload'] ) ) {
+		$steps['upload'] = call_user_func( $ovb_up_observer, $steps['upload'] );
+	}
+	return $steps;
+};
+$ovb_up_types      = static function ( $factories ) {
+	$factories['failing'] = static function () {
+		return new OvbFailingDestination();
+	};
+	$factories['flaky']   = static function ( $settings ) {
+		return new OvbFlakyDestination( new LocalDestination( $settings ) );
+	};
+	return $factories;
+};
+add_filter( 'ovb_engine_steps', $ovb_up_hook, 30 );
+add_filter( 'ovb_register_destinations', $ovb_up_types );
+
+$ovb_up_content_before = scandir( WP_CONTENT_DIR );
+$ovb_up_dest_dir       = WP_CONTENT_DIR . '/ovb-dest-test';
+$ovb_up_flaky_dir      = WP_CONTENT_DIR . '/ovb-dest-flaky';
+$ovb_up_decoy          = WP_CONTENT_DIR . '/ovb-dest-decoy.txt';
+$ovb_up_victim         = WP_CONTENT_DIR . '/ovb-dest-victim';
+$ovb_up_uploads        = wp_get_upload_dir();
+$ovb_up_fixture        = $ovb_up_uploads['basedir'] . '/ovb-up-fixture';
+$ovb_up_secret         = 'ovb-secret-xyz-123456';
+$GLOBALS['ovb_flaky_left'] = 0;
+$GLOBALS['ovb_up_slices']  = 0;
+$GLOBALS['ovb_up_kinds']   = array();
+
+try {
+	$drepo    = new DestinationsRepository();
+	$frepo    = new BackupFilesRepository();
+	$ubk      = new BackupsRepository();
+	$registry = new DestinationRegistry();
+	$format   = ( new CapabilityDetector() )->default_format();
+	ovb_check( 'upload: a backup format is available for the destination tests', null !== $format );
+
+	// 15a. Registry, types and the filter, in real WordPress.
+	ovb_check( 'upload: the registry offers local and the providers added through the ovb_register_destinations filter', array( 'local', 's3', 'failing', 'flaky' ) === $registry->types(), wp_json_encode( $registry->types() ) );
+	file_put_contents( $ovb_up_decoy, 'decoy-content' );
+	ovb_arc_mkdir( $ovb_up_victim );
+	file_put_contents( $ovb_up_victim . '/victim.txt', 'victim-content' );
+	$decoy_sha  = sha1_file( $ovb_up_decoy );
+	$victim_sha = sha1_file( $ovb_up_victim . '/victim.txt' );
+
+	$d_local         = $drepo->create( 'local', 'Matrix local', array( 'path' => $ovb_up_dest_dir ), array() );
+	$d_fail          = $drepo->create( 'failing', 'Matrix failing', array(), array( 'token' => $ovb_up_secret ) );
+	$d_recon         = $drepo->create( 'local', 'Matrix reconnect', array( 'path' => $ovb_up_flaky_dir . '-x' ), array( 'token' => $ovb_up_secret ) );
+	$d_flaky         = $drepo->create( 'flaky', 'Matrix flaky', array( 'path' => $ovb_up_flaky_dir ), array() );
+	$d_default       = $drepo->create( 'local', 'Matrix default', array( 'path' => '' ), array() );
+	$ovb_up_dest_ids = array( $d_local, $d_fail, $d_recon, $d_flaky, $d_default );
+	$wpdb->update( $ovb_prefix . 'destinations', array( 'status' => 'needs_reconnect' ), array( 'id' => $d_recon ) );
+	ovb_check( 'upload: destination rows were created', min( $ovb_up_dest_ids ) > 0, wp_json_encode( $ovb_up_dest_ids ) );
+
+	$unknown = ovb_throws( static function () use ( $registry ) {
+		$registry->create( array( 'id' => 1, 'type' => 'nosuch', 'settings' => array(), 'status' => 'new' ) );
+	} );
+	ovb_check( 'upload: an unknown destination type is refused with a typed exception', DestinationException::class === $unknown );
+	$reconnect = null;
+	try {
+		$registry->create( $drepo->find( $d_recon ) );
+	} catch ( DestinationException $e ) {
+		$reconnect = $e;
+	}
+	ovb_check( 'upload: a needs_reconnect destination is refused (reason needs_reconnect, not retryable)', null !== $reconnect && 'needs_reconnect' === $reconnect->reason() && ! $reconnect->retryable() );
+	ovb_check( 'upload: credentials of a healthy destination are decrypted only when creating it', $registry->create( $drepo->find( $d_fail ) ) instanceof OvbFailingDestination );
+
+	// 15b. Local destination against the real filesystem.
+	$local_instance = $registry->create( $drepo->find( $d_local ) );
+	$tested         = $local_instance->test_connection();
+	ovb_check( 'upload: test_connection writes, reads back and removes a probe file', $tested->ok() && is_dir( $ovb_up_dest_dir ) && array() === glob( $ovb_up_dest_dir . '/.ovb-probe-*' ), $tested->message() );
+	ovb_check( 'upload: a custom folder inside the WordPress folder gets guard files', is_file( $ovb_up_dest_dir . '/index.php' ) && is_file( $ovb_up_dest_dir . '/.htaccess' ) );
+	$forbidden = array(
+		'the WordPress folder'  => rtrim( ABSPATH, '/' ),
+		'wp-admin'              => ABSPATH . 'wp-admin',
+		'wp-includes/js'        => ABSPATH . 'wp-includes/js',
+		'the plugin tmp folder' => Paths::tmp_dir(),
+		'a relative path'       => 'backups/here',
+		'a path with ..'        => WP_CONTENT_DIR . '/x/../y',
+	);
+	foreach ( $forbidden as $label => $path ) {
+		$refused = ( new LocalDestination( array( 'path' => $path ) ) )->test_connection();
+		ovb_check( "upload: local refuses $label", ! $refused->ok() && false === strpos( $refused->message(), ABSPATH ) && false === strpos( $refused->message(), WP_CONTENT_DIR ), $refused->message() );
+	}
+	$quota = $local_instance->quota();
+	ovb_check( 'upload: quota reports free and total bytes when the host allows it', null === $quota || ( $quota['total'] > 0 && $quota['free'] >= 0 ) );
+
+	// 15c. REST argument validation (nothing is started).
+	$count_backups = static function () use ( $wpdb, $ovb_prefix ) {
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}backups" );
+	};
+	$rest_start    = static function ( $body ) {
+		$request = new WP_REST_Request( 'POST', '/ovb/v1/backups' );
+		$request->set_header( 'content-type', 'application/json' );
+		$request->set_body( wp_json_encode( $body ) );
+		return rest_do_request( $request );
+	};
+	$before        = $count_backups();
+	$rejects       = array(
+		'a destination that does not exist'    => array( 'destinations' => array( 2147000000 ) ),
+		'a destination that needs a reconnect' => array( 'destinations' => array( $d_recon ) ),
+		'a string instead of a list'           => array( 'destinations' => 'all' ),
+		'a list of words'                      => array( 'destinations' => array( 'abc' ) ),
+		'more than ten destinations'           => array( 'destinations' => range( 1, 11 ) ),
+		'a zero id'                            => array( 'destinations' => array( 0 ) ),
+	);
+	foreach ( $rejects as $label => $body ) {
+		$response = $rest_start( $body );
+		ovb_check( "upload REST: $label is refused with 400", 400 === $response->get_status(), (string) $response->get_status() . ' ' . wp_json_encode( $response->get_data() ) );
+	}
+	ovb_check( 'upload REST: refused starts created no backup', $count_backups() === $before );
+
+	// 15d. A real backup (database + a 22 MB uploads fixture, 10 MB parts) to a failing, a working and a reconnect-needing destination.
+	if ( null !== $format ) {
+		$settings                      = is_array( $ovb_up_settings ) ? $ovb_up_settings : array();
+		$settings['part_size_mb']      = 10;
+		$settings['min_free_space_mb'] = 0;
+		update_option( 'ovb_settings', $settings );
+		ovb_arc_mkdir( $ovb_up_fixture );
+		ovb_arc_random_file( $ovb_up_fixture . '/a.bin', 8 );
+		ovb_arc_random_file( $ovb_up_fixture . '/b.bin', 8 );
+		ovb_arc_random_file( $ovb_up_fixture . '/c.bin', 6 );
+
+		$clock   = 0.0;
+		$factory = static function () use ( &$clock ) {
+			return new Budget(
+				40,
+				PHP_INT_MAX,
+				static function () use ( &$clock ) {
+					$clock += 1.0;
+					return $clock;
+				}
+			);
+		};
+		$obs     = array(
+			'seen'            => array(),
+			'garbage'         => 0,
+			'saved'           => null,
+			'replayed'        => false,
+			'order_violation' => false,
+		);
+		$observe = static function ( JobContext $c ) use ( &$obs, $frepo, $d_local, $ovb_up_dest_dir ) {
+			$rows       = $frepo->for_backup( $c->backup_id() );
+			$parts_done = true;
+			foreach ( $rows as $r ) {
+				if ( $r['destination_id'] === $d_local && 'manifest.json' !== $r['file_name'] && 'done' !== $r['upload_status'] ) {
+					$parts_done = false;
+				}
+			}
+			foreach ( $rows as $r ) {
+				if ( $r['destination_id'] !== $d_local ) {
+					continue;
+				}
+				if ( 'manifest.json' === $r['file_name'] && in_array( $r['upload_status'], array( 'uploading', 'done' ), true ) && ! $parts_done ) {
+					$obs['order_violation'] = true;
+				}
+				if ( 'uploading' !== $r['upload_status'] || '' === $r['upload_session'] ) {
+					continue;
+				}
+				$session = json_decode( $r['upload_session'], true );
+				if ( ! is_array( $session ) ) {
+					continue;
+				}
+				$offset                    = (int) $session['o'];
+				$obs['seen'][ $r['id'] ][] = $offset;
+				$part                      = $ovb_up_dest_dir . '/' . $session['p'] . '.part';
+				if ( 0 === $obs['garbage'] && count( $obs['seen'][ $r['id'] ] ) >= 2 && is_file( $part ) ) {
+					// A killed run: bytes after the saved offset.
+					file_put_contents( $part, 'GARBAGE' . random_bytes( 3000 ), FILE_APPEND );
+					$obs['garbage'] = 1;
+				}
+				if ( null === $obs['saved'] && $offset > 0 ) {
+					$obs['saved'] = array( $r['id'], $r['upload_session'], $offset );
+				} elseif ( ! $obs['replayed'] && null !== $obs['saved'] && $obs['saved'][0] === $r['id'] && $offset >= $obs['saved'][2] + 2 * 1048576 ) {
+					// Slices ran and their sessions were lost: an older session comes back, the partial file is longer.
+					$frepo->update_upload( $r['id'], 'uploading', array( 'upload_session' => $obs['saved'][1] ) );
+					$obs['seen'][ $r['id'] ][] = null;
+					$obs['replayed']           = true;
+				}
+			}
+		};
+		$ovb_up_observer = static function ( $inner ) use ( $observe ) {
+			return new OvbUploadObserver( $inner, $observe );
+		};
+
+		$runner              = new JobRunner( null, null, $factory );
+		$job                 = $ubk->create( array( 'note' => $ovb_marker . ' upload X', 'contents' => array( 'db' => true, 'uploads' => true ), 'format' => $format ) );
+		$ovb_up_backup_ids[] = $job;
+		$runner->start( $job, array( 'destinations' => array( $d_fail, $d_local, $d_recon ) ) );
+		$started_state = $ubk->load_state( $job );
+		$started_meta  = $started_state->get_meta();
+		ovb_check( 'upload: start() stores the selected destinations in the job state meta', array( $d_fail, $d_local, $d_recon ) === ( isset( $started_meta['destinations'] ) ? $started_meta['destinations'] : null ) );
+
+		$outcomes = array();
+		for ( $i = 0; $i < 900; $i++ ) {
+			ovb_clear_pending( $job );
+			$out        = $runner->run( $job );
+			$outcomes[] = $out;
+			if ( ! in_array( $out, array( 'continued', 'waiting' ), true ) ) {
+				break;
+			}
+		}
+		$final      = $ubk->find( $job );
+		$fstate     = $ubk->load_state( $job );
+		$meta       = $fstate->get_meta();
+		$folder     = Paths::build_backup_folder_name( $final['created_at'], $final['uuid'] );
+		$host       = RemotePath::site_host( site_url() );
+		$local_rows = array();
+		foreach ( $frepo->for_backup_and_destination( $job, 0 ) as $r ) {
+			$local_rows[ $r['file_name'] ] = $r;
+		}
+		$names_sorted = array_keys( $local_rows );
+		sort( $names_sorted );
+
+		ovb_check( 'upload: the backup ended as partial because one destination failed (never complete)', 'partial' === $final['status'] && 'done' === $fstate->get_step() && 'partial' === ( isset( $meta['result'] ) ? $meta['result'] : '' ), wp_json_encode( array_count_values( $outcomes ) ) . ' ' . $final['status'] . ' ' . (string) $fstate->get_error() );
+		ovb_check( sprintf( 'upload: the upload step needed %d slices (more than 10), all through the runner', $GLOBALS['ovb_up_slices'] ), $GLOBALS['ovb_up_slices'] > 10 && in_array( 'continue', $GLOBALS['ovb_up_kinds'], true ) && in_array( 'wait', $GLOBALS['ovb_up_kinds'], true ) && in_array( 'next', $GLOBALS['ovb_up_kinds'], true ), wp_json_encode( array_count_values( $GLOBALS['ovb_up_kinds'] ) ) );
+		ovb_check( 'upload: a transient error made the step wait (backoff) twice before the third attempt failed the file', 2 === count( array_keys( $outcomes, 'waiting', true ) ), wp_json_encode( array_count_values( $outcomes ) ) );
+
+		$monotonic = true;
+		$moves     = 0;
+		foreach ( $obs['seen'] as $offsets ) {
+			$prev = -1;
+			foreach ( $offsets as $offset ) {
+				if ( null === $offset ) {
+					$prev = -1; // The simulated lost session.
+					continue;
+				}
+				if ( $offset < $prev ) {
+					$monotonic = false;
+				}
+				$moves += $offset > $prev ? 1 : 0;
+				$prev   = $offset;
+			}
+		}
+		ovb_check( 'upload: saved session offsets only grow', $monotonic && $moves > 10, wp_json_encode( $obs['seen'] ) );
+		ovb_check( 'upload: crash simulations ran: garbage after the saved offset and an older session replayed', 1 === $obs['garbage'] && $obs['replayed'], wp_json_encode( array( $obs['garbage'], $obs['replayed'] ) ) );
+		ovb_check( 'upload: manifest.json was never started before every part was done', ! $obs['order_violation'] );
+
+		$d1_rows = array();
+		foreach ( $frepo->for_backup_and_destination( $job, $d_local ) as $r ) {
+			$d1_rows[ $r['file_name'] ] = $r;
+		}
+		$rows_ok  = count( $local_rows ) >= 4 && count( $local_rows ) === count( $d1_rows ) && array() === array_diff( array_keys( $local_rows ), array_keys( $d1_rows ) );
+		$files_ok = true;
+		$detail   = array();
+		foreach ( $local_rows as $name => $local ) {
+			$remote = isset( $d1_rows[ $name ] ) ? $d1_rows[ $name ] : null;
+			$ref    = RemotePath::file( $host, $folder, $name );
+			$path   = $ovb_up_dest_dir . '/' . $ref;
+			if ( null === $remote || 'done' !== $remote['upload_status'] || $remote['remote_ref'] !== $ref || (int) $remote['size'] !== (int) $local['size'] || '' !== $remote['upload_session'] || ! is_file( $path ) || filesize( $path ) !== (int) $local['size'] || ( '' !== $local['checksum_sha256'] && hash_file( 'sha256', $path ) !== $local['checksum_sha256'] ) ) {
+				$files_ok = false;
+				$detail[] = $name;
+			}
+		}
+		ovb_check( 'upload: every part and the manifest are in the destination folder with matching size and sha256; rows are done with the remote_ref and no session left', $rows_ok && $files_ok, wp_json_encode( $detail ) . ' ' . wp_json_encode( array_keys( $d1_rows ) ) );
+		$tree = ovb_up_files_below( $ovb_up_dest_dir . '/' . RemotePath::folder( $host, $folder ) );
+		ovb_check( 'upload: the remote folder holds exactly the local files and no .part leftovers', $tree === $names_sorted, wp_json_encode( $tree ) );
+		$manifest_time = filemtime( $ovb_up_dest_dir . '/' . RemotePath::file( $host, $folder, 'manifest.json' ) );
+		$last_part     = 0;
+		foreach ( $local_rows as $name => $local ) {
+			if ( 'manifest.json' !== $name ) {
+				$last_part = max( $last_part, filemtime( $ovb_up_dest_dir . '/' . RemotePath::file( $host, $folder, $name ) ) );
+			}
+		}
+		ovb_check( 'upload: the manifest was written after the last part', $manifest_time >= $last_part );
+		$remote_manifest = json_decode( (string) file_get_contents( $ovb_up_dest_dir . '/' . RemotePath::file( $host, $folder, 'manifest.json' ) ), true );
+		$part_names      = is_array( $remote_manifest ) && isset( $remote_manifest['parts'] ) ? array_column( $remote_manifest['parts'], 'name' ) : array();
+		ovb_check( 'upload: the uploaded manifest is the real one and lists the uploaded parts', is_array( $remote_manifest ) && count( $part_names ) === count( $local_rows ) - 1 && array() === array_diff( $part_names, array_keys( $d1_rows ) ) );
+
+		$fail_rows = $frepo->for_backup_and_destination( $job, $d_fail );
+		$fail_done = array_filter( $fail_rows, static function ( $r ) { return 'done' === $r['upload_status']; } );
+		$fail_man  = array_values( array_filter( $fail_rows, static function ( $r ) { return 'manifest.json' === $r['file_name']; } ) );
+		ovb_check( 'upload: the failing destination has failed rows, nothing done, and its manifest was never uploaded', count( $fail_rows ) === count( $local_rows ) && array() === $fail_done && 1 === count( $fail_man ) && 'done' !== $fail_man[0]['upload_status'] && in_array( 'failed', array_column( $fail_rows, 'upload_status' ), true ) );
+		ovb_check( 'upload: the failing destination did not stop the others (the working one is done)', 'done' === ( isset( $meta['upload'][ $d_local ]['s'] ) ? $meta['upload'][ $d_local ]['s'] : '' ) && 'failed' === ( isset( $meta['upload'][ $d_fail ]['s'] ) ? $meta['upload'][ $d_fail ]['s'] : '' ) && 'failed' === ( isset( $meta['upload'][ $d_recon ]['s'] ) ? $meta['upload'][ $d_recon ]['s'] : '' ), wp_json_encode( isset( $meta['upload'] ) ? $meta['upload'] : null ) );
+		$recon_rows = $frepo->for_backup_and_destination( $job, $d_recon );
+		ovb_check( 'upload: a destination that needs a reconnect fails every file with the reconnect message and uploads nothing', count( $recon_rows ) === count( $local_rows ) && array( 'failed' ) === array_values( array_unique( array_column( $recon_rows, 'upload_status' ) ) ) && false !== stripos( (string) ( isset( $meta['upload'][ $d_recon ]['e'] ) ? $meta['upload'][ $d_recon ]['e'] : '' ), 'reconnect' ) && ! is_dir( $ovb_up_flaky_dir . '-x' ) );
+
+		$after_local = true;
+		foreach ( $local_rows as $name => $local ) {
+			$path = Paths::backup_dir( $final['created_at'], $final['uuid'] ) . '/' . $name;
+			if ( 'done' !== $local['upload_status'] || ! is_file( $path ) || filesize( $path ) !== (int) $local['size'] ) {
+				$after_local = false;
+			}
+		}
+		ovb_check( 'upload: the local primary copy (destination 0) is untouched', $after_local && count( $local_rows ) >= 4 );
+
+		$state_json = (string) $wpdb->get_var( $wpdb->prepare( "SELECT state FROM {$ovb_prefix}backups WHERE id = %d", $job ) );
+		$logs_blob  = implode( "\n", (array) $wpdb->get_col( $wpdb->prepare( "SELECT CONCAT(message, ' ', COALESCE(context, '')) FROM {$ovb_prefix}logs WHERE backup_id = %d", $job ) ) );
+		$sess_blob  = implode( "\n", (array) $wpdb->get_col( $wpdb->prepare( "SELECT CONCAT(COALESCE(remote_ref, ''), COALESCE(upload_session, '')) FROM {$ovb_prefix}backup_files WHERE backup_id = %d", $job ) ) );
+		$response   = rest_do_request( new WP_REST_Request( 'GET', '/ovb/v1/backups/' . $job . '/progress' ) );
+		$payload    = $response->get_data();
+		$payload_js = (string) wp_json_encode( $payload );
+		ovb_check( 'upload: no secret reaches the job state, the logs, the file rows or the REST payload (a bearer token in an error is scrubbed)', false === strpos( $state_json . $logs_blob . $sess_blob . $payload_js, $ovb_up_secret ), 'found in: ' . ( false !== strpos( $state_json, $ovb_up_secret ) ? 'state ' : '' ) . ( false !== strpos( $logs_blob, $ovb_up_secret ) ? 'logs ' : '' ) . ( false !== strpos( $payload_js, $ovb_up_secret ) ? 'rest' : '' ) );
+		ovb_check( 'upload: the failing destination was logged as a warning (retry) and then an error', false !== strpos( $logs_blob, 'will be retried' ) && false !== strpos( $logs_blob, 'An upload failed.' ) );
+		$by_id = array();
+		foreach ( is_array( $payload ) && isset( $payload['destinations'] ) ? $payload['destinations'] : array() as $entry ) {
+			$by_id[ $entry['id'] ] = $entry;
+		}
+		ovb_check( 'upload REST: the progress payload lists each destination with a text status and file counts', 200 === $response->get_status() && 3 === count( $by_id ) && 'failed' === ( isset( $by_id[ $d_fail ]['status'] ) ? $by_id[ $d_fail ]['status'] : '' ) && 'done' === ( isset( $by_id[ $d_local ]['status'] ) ? $by_id[ $d_local ]['status'] : '' ) && 'failed' === ( isset( $by_id[ $d_recon ]['status'] ) ? $by_id[ $d_recon ]['status'] : '' ) && (int) $by_id[ $d_local ]['files_done'] === (int) $by_id[ $d_local ]['files_total'] && 'Matrix local' === $by_id[ $d_local ]['label'], $payload_js );
+		ovb_check( 'upload REST: the payload shows no server path', false === strpos( $payload_js, ABSPATH ) && false === strpos( $payload_js, 'ovb-dest-test' ), $payload_js );
+
+		// 15e. Listing and deleting inside the destination, containment.
+		$listed = iterator_to_array( $local_instance->list(), false );
+		$refs   = array_column( $listed, 'ref' );
+		ovb_check( 'upload: list() returns the uploaded files (no .part, no guard files)', count( $refs ) === count( $local_rows ) && in_array( RemotePath::file( $host, $folder, 'manifest.json' ), $refs, true ), wp_json_encode( $refs ) );
+		$escapes     = array( '../ovb-dest-decoy.txt', '../../' . basename( WP_CONTENT_DIR ) . '/ovb-dest-decoy.txt', $ovb_up_decoy, 'OpenVault-Backups/../../ovb-dest-decoy.txt' );
+		$refused_all = true;
+		foreach ( $escapes as $escape ) {
+			$refused_all = $refused_all && DestinationException::class === ovb_throws( static function () use ( $local_instance, $escape ) {
+				$local_instance->delete( $escape );
+			} ) && DestinationException::class === ovb_throws( static function () use ( $local_instance, $escape ) {
+				$local_instance->download( $escape, static function () {} );
+			} );
+		}
+		ovb_check( 'upload: delete() and download() refuse paths that leave the destination folder; the decoy file is untouched', $refused_all && sha1_file( $ovb_up_decoy ) === $decoy_sha );
+		if ( function_exists( 'symlink' ) && @symlink( $ovb_up_victim, $ovb_up_dest_dir . '/OpenVault-Backups/linkdir' ) ) {
+			$link_refused = DestinationException::class === ovb_throws( static function () use ( $local_instance ) {
+				$local_instance->delete( 'OpenVault-Backups/linkdir/victim.txt' );
+			} );
+			$link_listed  = in_array( 'OpenVault-Backups/linkdir/victim.txt', array_column( iterator_to_array( $local_instance->list(), false ), 'ref' ), true );
+			ovb_check( 'upload: a symlink inside the destination is never followed (not deleted through, not listed); the target survives', $link_refused && ! $link_listed && sha1_file( $ovb_up_victim . '/victim.txt' ) === $victim_sha );
+			unlink( $ovb_up_dest_dir . '/OpenVault-Backups/linkdir' );
+		}
+		$folder_ref = RemotePath::folder( $host, $folder );
+		$local_instance->delete( $folder_ref );
+		ovb_check( 'upload: delete() of a backup folder removes it and prunes empty parents but keeps the destination folder', ! file_exists( $ovb_up_dest_dir . '/' . $folder_ref ) && is_dir( $ovb_up_dest_dir ) );
+		ovb_check( 'upload: the local primary copy still exists after deleting the remote copy', is_file( Paths::backup_dir( $final['created_at'], $final['uuid'] ) . '/manifest.json' ) );
+		$ovb_up_observer = null;
+		ovb_arc_rm( $ovb_up_fixture );
+		update_option( 'ovb_settings', $ovb_up_settings );
+
+		// 15f. A database-only backup to a destination that fails twice and then works, the working folder and the plugin's own folder: complete.
+		$GLOBALS['ovb_flaky_left'] = 2;
+		$runner2                   = new JobRunner(
+			null,
+			null,
+			static function () {
+				return new Budget( 600, PHP_INT_MAX );
+			}
+		);
+		$job2                = $ubk->create( array( 'note' => $ovb_marker . ' upload Y', 'contents' => array( 'db' => true ), 'format' => $format ) );
+		$ovb_up_backup_ids[] = $job2;
+		$runner2->start( $job2, array( 'destinations' => array( $d_flaky, $d_local, $d_default ) ) );
+		$outcomes2 = array();
+		$delays    = array();
+		for ( $i = 0; $i < 60; $i++ ) {
+			ovb_clear_pending( $job2 );
+			$out         = $runner2->run( $job2 );
+			$outcomes2[] = $out;
+			if ( 'waiting' === $out ) {
+				$when     = as_next_scheduled_action( JobRunner::ACTION, array( $job2 ), JobRunner::GROUP );
+				$delays[] = is_int( $when ) ? $when - time() : -1;
+			}
+			if ( ! in_array( $out, array( 'continued', 'waiting' ), true ) ) {
+				break;
+			}
+		}
+		$final2  = $ubk->find( $job2 );
+		$meta2   = $ubk->load_state( $job2 )->get_meta();
+		$folder2 = Paths::build_backup_folder_name( $final2['created_at'], $final2['uuid'] );
+		$local2  = $frepo->for_backup_and_destination( $job2, 0 );
+		ovb_check( 'upload: when every destination succeeds the backup is complete (a transient error was retried)', 'complete' === $final2['status'] && ! isset( $meta2['result'] ) && 2 === count( array_keys( $outcomes2, 'waiting', true ) ), wp_json_encode( array_count_values( $outcomes2 ) ) . ' ' . $final2['status'] );
+		ovb_check( 'upload: the wait after the first transient error is about 30 s and after the second about 120 s', 2 === count( $delays ) && $delays[0] >= 25 && $delays[0] <= 35 && $delays[1] >= 115 && $delays[1] <= 125, wp_json_encode( $delays ) );
+		$all_done = true;
+		foreach ( array( $d_flaky, $d_local, $d_default ) as $dest ) {
+			$rows     = $frepo->for_backup_and_destination( $job2, $dest );
+			$all_done = $all_done && count( $rows ) === count( $local2 ) && array( 'done' ) === array_values( array_unique( array_column( $rows, 'upload_status' ) ) );
+		}
+		ovb_check( 'upload: three destinations each hold a done row for every file', $all_done && 'done' === ( isset( $meta2['upload'][ $d_flaky ]['s'] ) ? $meta2['upload'][ $d_flaky ]['s'] : '' ) && 'done' === ( isset( $meta2['upload'][ $d_default ]['s'] ) ? $meta2['upload'][ $d_default ]['s'] : '' ), wp_json_encode( isset( $meta2['upload'] ) ? $meta2['upload'] : null ) );
+		ovb_check( 'upload: the flaky and the working folder received the files', is_file( $ovb_up_flaky_dir . '/' . RemotePath::file( $host, $folder2, 'manifest.json' ) ) && is_file( $ovb_up_dest_dir . '/' . RemotePath::file( $host, $folder2, 'manifest.json' ) ) );
+		$refs_ok = true;
+		foreach ( $frepo->for_backup_and_destination( $job2, $d_default ) as $r ) {
+			$refs_ok = $refs_ok && $r['remote_ref'] === $folder2 . '/' . $r['file_name'];
+		}
+		ovb_check( 'upload: the destination on the plugin folder copies nothing: its remote_ref is the existing file and no second folder tree appears', $refs_ok && ! is_dir( Paths::backups_dir() . '/OpenVault-Backups' ) );
+		$parts_left = array_filter(
+			array_merge( ovb_up_files_below( $ovb_up_dest_dir ), ovb_up_files_below( $ovb_up_flaky_dir ), ovb_up_files_below( Paths::backups_dir() ) ),
+			static function ( $f ) {
+				return '.part' === substr( $f, -5 );
+			}
+		);
+		ovb_check( 'upload: a finished backup with several destinations has no leftover .part files', array() === $parts_left );
+
+		// 15g. A backup without destinations skips the step (local only).
+		$job3                = $ubk->create( array( 'note' => $ovb_marker . ' upload Z', 'contents' => array( 'db' => true ), 'format' => $format ) );
+		$ovb_up_backup_ids[] = $job3;
+		$runner2->start( $job3 );
+		$out3 = 'continued';
+		for ( $i = 0; $i < 60 && 'continued' === $out3; $i++ ) {
+			ovb_clear_pending( $job3 );
+			$out3 = $runner2->run( $job3 );
+		}
+		$remote3 = array_filter(
+			$frepo->for_backup( $job3 ),
+			static function ( $r ) {
+				return $r['destination_id'] > 0;
+			}
+		);
+		ovb_check( 'upload: a backup without destinations completes and creates no remote rows', 'complete' === $ubk->find( $job3 )['status'] && array() === $remote3 );
+	}//end if
+} catch ( \Throwable $e ) {
+	ovb_check( 'upload: no uncaught exception', false, get_class( $e ) . ': ' . $e->getMessage() . ' @ ' . basename( $e->getFile() ) . ':' . $e->getLine() );
+} finally {
+	$ovb_up_observer = null;
+	remove_filter( 'ovb_engine_steps', $ovb_up_hook, 30 );
+	remove_filter( 'ovb_register_destinations', $ovb_up_types );
+	update_option( 'ovb_settings', $ovb_up_settings );
+	foreach ( array( $ovb_up_dest_dir, $ovb_up_flaky_dir, $ovb_up_flaky_dir . '-x', $ovb_up_victim, $ovb_up_fixture, $ovb_up_decoy ) as $leftover_path ) {
+		ovb_arc_rm( $leftover_path );
+	}
+	foreach ( $ovb_up_backup_ids as $cleanup_id ) {
+		$backup_row = $wpdb->get_row( $wpdb->prepare( "SELECT created_at, uuid FROM {$ovb_prefix}backups WHERE id = %d", $cleanup_id ), ARRAY_A );
+		if ( $backup_row ) {
+			ovb_arc_rm( Paths::backups_dir() . '/' . Paths::build_backup_folder_name( $backup_row['created_at'], $backup_row['uuid'] ) );
+		}
+		ovb_clear_pending( $cleanup_id );
+		$wpdb->delete( $ovb_prefix . 'backup_files', array( 'backup_id' => $cleanup_id ) );
+		$wpdb->delete( $ovb_prefix . 'logs', array( 'backup_id' => $cleanup_id ) );
+		$wpdb->delete( $ovb_prefix . 'backups', array( 'id' => $cleanup_id ) );
+		$wpdb->delete( $wpdb->options, array( 'option_name' => 'ovb_lock_' . $cleanup_id ) );
+	}
+	foreach ( $ovb_up_dest_ids as $cleanup_id ) {
+		$wpdb->delete( $ovb_prefix . 'destinations', array( 'id' => $cleanup_id ) );
+	}
+	foreach ( glob( Paths::tmp_dir() . '/*', GLOB_ONLYDIR ) ?: array() as $leftover_dir ) {
+		if ( Manifest::is_valid_uuid( basename( $leftover_dir ) ) ) {
+			CleanupStep::remove_tree( $leftover_dir );
+		}
+	}
+}
+$up_leftovers = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$ovb_prefix}backups WHERE note LIKE %s", $wpdb->esc_like( $ovb_marker ) . '%' ) )
+	+ (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}destinations WHERE label LIKE 'Matrix %'" )
+	+ count( glob( Paths::tmp_dir() . '/*', GLOB_ONLYDIR ) ?: array() )
+	+ count( glob( Paths::backups_dir() . '/*', GLOB_ONLYDIR ) ?: array() )
+	+ (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'ovb\\_lock\\_%'" );
+ovb_check( 'upload: destinations, backups, backup folders, destination folders, fixtures, rows and locks cleaned up; nothing else in wp-content changed', 0 === $up_leftovers && scandir( WP_CONTENT_DIR ) === $ovb_up_content_before, "leftovers: $up_leftovers " . wp_json_encode( array_diff( scandir( WP_CONTENT_DIR ), $ovb_up_content_before ) ) );
+
+// 16. S3-compatible destination against a REAL S3 server (Milestone 4, step 4b). The matrix harness starts SeaweedFS next to the
+// site (alias s3srv, see run.sh) and passes OVB_S3_ENDPOINT / OVB_S3_ACCESS / OVB_S3_SECRET. Real signatures, real multipart, real
+// ListParts. The checks must run and pass in every profile: a missing server is a failure, never a skip.
+use OpenVault\Backup\Destinations\S3\S3Client;
+use OpenVault\Backup\Destinations\S3\S3Destination;
+use OpenVault\Backup\Destinations\S3\S3Presets;
+use OpenVault\Backup\Destinations\S3\SigV4Signer;
+
+$ovb_s3_endpoint = (string) getenv( 'OVB_S3_ENDPOINT' );
+$ovb_s3_access   = (string) getenv( 'OVB_S3_ACCESS' );
+$ovb_s3_secret   = (string) getenv( 'OVB_S3_SECRET' );
+ovb_check( 's3: the matrix S3 server is configured (OVB_S3_ENDPOINT, OVB_S3_ACCESS, OVB_S3_SECRET)', '' !== $ovb_s3_endpoint && '' !== $ovb_s3_access && '' !== $ovb_s3_secret );
+
+// Harness helper: create or remove a bucket with a signed request (the plugin itself never creates buckets).
+function ovb_s3_bucket_call( $method, $endpoint, $access, $secret, $bucket ) {
+	$parts   = parse_url( $endpoint );
+	$host    = $parts['host'] . ( isset( $parts['port'] ) ? ':' . $parts['port'] : '' );
+	$signer  = new SigV4Signer( $access, $secret, 'us-east-1' );
+	$headers = $signer->sign( $method, '/' . $bucket, array(), array( 'host' => $host ) );
+	unset( $headers['host'] );
+	$response = wp_remote_request( $endpoint . '/' . $bucket, array( 'method' => $method, 'headers' => $headers, 'timeout' => 20, 'reject_unsafe_urls' => false ) );
+	return is_wp_error( $response ) ? $response->get_error_message() : (int) wp_remote_retrieve_response_code( $response );
+}
+
+function ovb_s3_sha256( S3Destination $d, $ref ) {
+	$ctx = hash_init( 'sha256' );
+	$d->download(
+		$ref,
+		static function ( $chunk ) use ( $ctx ) {
+			hash_update( $ctx, $chunk );
+		}
+	);
+	return hash_final( $ctx );
+}
+
+$ovb_s3_bucket    = 'ovb-matrix-' . strtolower( wp_generate_password( 8, false ) );
+$ovb_s3_dest_ids  = array();
+$ovb_s3_backups   = array();
+$ovb_s3_files     = array();
+$ovb_s3_dest_real = null;
+$ovb_s3_settings  = get_option( 'ovb_settings' );
+$ovb_s3_observer  = null;
+$ovb_s3_hook      = static function ( $steps ) use ( &$ovb_s3_observer ) {
+	if ( null !== $ovb_s3_observer && isset( $steps['upload'] ) ) {
+		$steps['upload'] = call_user_func( $ovb_s3_observer, $steps['upload'] );
+	}
+	return $steps;
+};
+add_filter( 'ovb_engine_steps', $ovb_s3_hook, 30 );
+$ovb_s3_peak_before = memory_get_peak_usage( true );
+$base            = array(
+	'preset'                 => 'custom',
+	'endpoint'               => $ovb_s3_endpoint,
+	'addressing'             => 'path',
+	'allow_insecure_http'    => true,
+	'allow_private_endpoint' => true,
+	'bucket'                 => $ovb_s3_bucket,
+	'prefix'                 => 'matrix-prefix',
+	'part_size_mb'           => 5,
+);
+
+try {
+	if ( '' === $ovb_s3_endpoint ) {
+		throw new RuntimeException( 'no S3 server configured' );
+	}
+	$created = ovb_s3_bucket_call( 'PUT', $ovb_s3_endpoint, $ovb_s3_access, $ovb_s3_secret, $ovb_s3_bucket );
+	ovb_check( 's3: the harness created a bucket on the server', 200 === $created, (string) $created );
+
+	$drepo    = new DestinationsRepository();
+	$frepo    = new BackupFilesRepository();
+	$ubk      = new BackupsRepository();
+	$registry = new DestinationRegistry();
+	$format   = ( new CapabilityDetector() )->default_format();
+	$good     = array( 'access_key' => $ovb_s3_access, 'secret_key' => $ovb_s3_secret );
+	$secret2  = 'WRONG-SECRET-' . wp_generate_password( 12, false );
+
+	$d_good  = $drepo->create( 's3', 'Matrix s3 good', $base, $good );
+	$d_wrong = $drepo->create( 's3', 'Matrix s3 wrong secret', $base, array( 'access_key' => $ovb_s3_access, 'secret_key' => $secret2 ) );
+	$d_bkt   = $drepo->create( 's3', 'Matrix s3 wrong bucket', array_merge( $base, array( 'bucket' => $ovb_s3_bucket . '-nope' ) ), $good );
+	$d_key   = $drepo->create( 's3', 'Matrix s3 wrong key', $base, array( 'access_key' => 'ovbnosuchaccesskey', 'secret_key' => $secret2 ) );
+	$ovb_s3_dest_ids = array( $d_good, $d_wrong, $d_bkt, $d_key );
+	ovb_check( 's3: destination rows were created through the repository', min( $ovb_s3_dest_ids ) > 0 );
+	$raw = (string) $wpdb->get_var( $wpdb->prepare( "SELECT credentials FROM {$ovb_prefix}destinations WHERE id = %d", $d_good ) );
+	ovb_check( 's3: the credentials column holds an ovb1: envelope, never the secret', 0 === strpos( $raw, 'ovb1:' ) && false === strpos( $raw, $ovb_s3_secret ) && false === strpos( $raw, $ovb_s3_access ) );
+	ovb_check( 's3: the registry offers s3 and builds it from a repository row', in_array( 's3', $registry->types(), true ) && $registry->create( $drepo->find( $d_good ) ) instanceof S3Destination );
+
+	// 16a. Connection tests.
+	$s3 = $registry->create( $drepo->find( $d_good ) );
+	$ok = $s3->test_connection();
+	ovb_check( 's3: test_connection: HEAD bucket, then a probe object is written, read back and removed', $ok->ok(), $ok->message() );
+	ovb_check( 's3: the probe object is gone', array() === iterator_to_array( ( new S3Client( S3Presets::resolve( $base ), new SigV4Signer( $ovb_s3_access, $ovb_s3_secret, 'us-east-1' ) ) )->list_objects_v2( '' ), false ) );
+	$bad = $registry->create( $drepo->find( $d_wrong ) )->test_connection();
+	ovb_check( 's3: a wrong secret gives the precise signature error without the secret', ! $bad->ok() && false !== stripos( $bad->message(), 'signature' ) && false === strpos( $bad->message(), $secret2 ) && false === strpos( $bad->message(), $ovb_s3_secret ), $bad->message() );
+	$nokey = $registry->create( $drepo->find( $d_key ) )->test_connection();
+	ovb_check( 's3: an unknown access key is reported without leaking keys', ! $nokey->ok() && false === strpos( $nokey->message(), $secret2 ) && false === strpos( $nokey->message(), 'ovbnosuchaccesskey' ), $nokey->message() );
+	$nobkt = $registry->create( $drepo->find( $d_bkt ) )->test_connection();
+	ovb_check( 's3: a wrong bucket gives the NoSuchBucket message', ! $nobkt->ok() && false !== strpos( $nobkt->message(), $ovb_s3_bucket . '-nope' ) && false !== stripos( $nobkt->message(), 'does not exist' ), $nobkt->message() );
+	$blocked = ( new S3Destination( array_merge( $base, array( 'endpoint' => 'http://169.254.169.254' ) ), $good ) )->test_connection();
+	ovb_check( 's3: the metadata address is refused before any request, whatever the allow flags say', ! $blocked->ok() && false !== stripos( $blocked->message(), 'never allowed' ), $blocked->message() );
+	$nohttp = ( new S3Destination( array_merge( $base, array( 'allow_insecure_http' => false ) ), $good ) )->test_connection();
+	ovb_check( 's3: plain http to a private host needs allow_insecure_http', ! $nohttp->ok() && false !== stripos( $nohttp->message(), 'https' ), $nohttp->message() );
+
+	// 16b. Uploads through S3Destination::upload_chunk: crash simulation by discarding the in-memory session and the object.
+	$tmp = get_temp_dir() . 'ovb-s3-' . wp_generate_password( 6, false );
+	wp_mkdir_p( $tmp );
+	$ovb_s3_files[] = $tmp;
+	$ref_base       = 'OpenVault-Backups/matrix.example/2026-01-02_030405_3f2a9c1e/';
+	$small          = $tmp . '/small.bin';
+	$large          = $tmp . '/large.bin';
+	file_put_contents( $small, random_bytes( 1048576 ) );
+	ovb_arc_random_file( $large, 40 );
+	$large_sha = hash_file( 'sha256', $large );
+
+	$tiny   = static function () {
+		return new Budget( 3, PHP_INT_MAX ); // Less than a part can take: one part per call.
+	};
+	$s3     = $registry->create( $drepo->find( $d_good ) );
+	$session = $s3->begin_upload( $ref_base . 'small.bin', 1048576 );
+	$p       = $s3->upload_chunk( $session, $small, $tiny() );
+	ovb_check( 's3: a 1 MiB file is one PUT (no multipart session)', $p->done() && '' === $session['upload_id'] && $ref_base . 'small.bin' === $p->remote_ref() && 1048576 === $p->bytes_sent() );
+	ovb_check( 's3: the 1 MiB object has the right sha256 when downloaded back', hash_file( 'sha256', $small ) === ovb_s3_sha256( $s3, $ref_base . 'small.bin' ) );
+
+	$session   = $s3->begin_upload( $ref_base . 'large.bin', filesize( $large ) );
+	$sessions  = array( $session );
+	$calls     = 0;
+	$crashed   = false;
+	$replayed  = false;
+	$max_json  = 0;
+	$final     = null;
+	$progress0 = $session;
+	while ( $calls < 60 ) {
+		$progress = $s3->upload_chunk( $session, $large, $tiny() );
+		++$calls;
+		$session  = $progress->session();
+		$sessions[] = $session;
+		$max_json = max( $max_json, strlen( (string) wp_json_encode( $session ) ) );
+		if ( $progress->done() ) {
+			$final = $progress;
+			break;
+		}
+		if ( 3 === $calls && ! $crashed ) {
+			// A killed run: a new object (fresh process), and the session saved two calls ago comes back; parts 3 and 4 are sent again.
+			$s3      = $registry->create( $drepo->find( $d_good ) );
+			$session = $sessions[1];
+			$crashed = true;
+		}
+	}
+	ovb_check( sprintf( 's3: a 40 MiB file went through multipart in %d calls (one 5 MiB part per call), with a simulated crash and resume', $calls ), null !== $final && $calls >= 8 && $crashed && $ref_base . 'large.bin' === $final->remote_ref(), (string) $calls );
+	ovb_check( 's3: the session stays tiny (' . $max_json . ' bytes) and holds no part list or ETags', $max_json < 400 && array( 'v', 'path', 'size', 'part_size', 'upload_id', 'next_part', 'offset', 'restarts' ) === array_keys( $session ) );
+	ovb_check( 's3: the stored 40 MiB object has the right size and sha256 (ranged downloads)', ovb_s3_sha256( $s3, $ref_base . 'large.bin' ) === $large_sha );
+	$client = new S3Client( S3Presets::resolve( $base ), new SigV4Signer( $ovb_s3_access, $ovb_s3_secret, 'us-east-1' ) );
+	$head   = $client->head_object( 'matrix-prefix/' . $ref_base . 'large.bin' );
+	ovb_check( 's3: HEAD reports the exact local size under the prefix', null !== $head && $head['size'] === filesize( $large ) );
+	$listed = iterator_to_array( $s3->list(), false );
+	$names  = array_column( $listed, 'ref' );
+	ovb_check( 's3: list() shows both objects without the prefix', in_array( $ref_base . 'large.bin', $names, true ) && in_array( $ref_base . 'small.bin', $names, true ), wp_json_encode( $names ) );
+	$s3->delete( $ref_base . 'large.bin' );
+	$s3->delete( $ref_base . 'small.bin' );
+	ovb_check( 's3: delete() removes the objects', array() === iterator_to_array( $s3->list(), false ) );
+	$gone = ovb_throws( static function () use ( $s3, $ref_base ) {
+		$s3->download( $ref_base . 'large.bin', static function () {} );
+	} );
+	ovb_check( 's3: downloading a deleted object raises a DestinationException', DestinationException::class === $gone );
+	$forged = ovb_throws( static function () use ( $s3 ) {
+		$s3->delete( '../../other' );
+	} );
+	ovb_check( 's3: a forged reference outside OpenVault-Backups is refused', DestinationException::class === $forged );
+
+	// 16c. Abort and stale multipart uploads (real ListMultipartUploads and AbortMultipartUpload).
+	$aborted = $s3->begin_upload( $ref_base . 'aborted.bin', 12 * 1048576 );
+	$s3->abort_upload( $aborted );
+	$stale = $s3->begin_upload( $ref_base . 'stale.bin', 12 * 1048576 );
+	sleep( 2 );
+	$count  = $s3->abort_stale_uploads( 1 );
+	$left   = iterator_to_array( $client->list_multipart_uploads( 'matrix-prefix/' ), false );
+	$no_age = 1 === count( $left ) && 0 === $left[0]['initiated'];
+	// Some servers (SeaweedFS) omit the start time in ListMultipartUploads; an upload of unknown age is never aborted.
+	ovb_check( 's3: abort_upload() works; abort_stale_uploads() aborts old uploads, and leaves an upload alone when the server gives no start time', ( $no_age && 0 === $count ) || ( $count >= 1 && array() === $left ), $count . ' ' . wp_json_encode( $left ) );
+	if ( $no_age ) {
+		$client->abort_multipart_upload( $left[0]['key'], $left[0]['upload_id'] );
+		ovb_check( 's3: the leftover upload was aborted directly', array() === iterator_to_array( $client->list_multipart_uploads( 'matrix-prefix/' ), false ) );
+	}
+	unset( $stale );
+
+	// 16d. ListParts pagination for real: more than 1000 parts of one byte (listed, never completed).
+	$mp_key = 'matrix-prefix/pagination/object.bin';
+	$mp_id  = $client->create_multipart_upload( $mp_key );
+	for ( $n = 1; $n <= 1005; $n++ ) {
+		$client->upload_part( $mp_key, $mp_id, $n, 'x' );
+	}
+	$listed_parts = $client->list_parts( $mp_key, $mp_id );
+	ovb_check( 's3: ListParts paginates past 1000 parts (1005 parts, all returned with their sizes)', 1005 === count( $listed_parts ) && 1 === $listed_parts[1005]['size'] && range( 1, 1005 ) === array_keys( $listed_parts ), (string) count( $listed_parts ) );
+	$client->abort_multipart_upload( $mp_key, $mp_id );
+	$vanished = ovb_throws( static function () use ( $client, $mp_key, $mp_id ) {
+		if ( array() !== $client->list_parts( $mp_key, $mp_id ) ) {
+			throw new RuntimeException( 'parts still listed' );
+		}
+	} );
+	// Servers differ: real S3 answers NoSuchUpload (DestinationException), others an empty list. Both mean "nothing left".
+	ovb_check( 's3: an aborted upload has no parts left (NoSuchUpload or an empty list)', 'RuntimeException' !== $vanished );
+
+	// 16e. A full backup through the JobRunner to S3, and one to a destination with wrong credentials.
+	if ( null !== $format ) {
+		$settings                      = is_array( $ovb_s3_settings ) ? $ovb_s3_settings : array();
+		$settings['part_size_mb']      = 10;
+		$settings['min_free_space_mb'] = 0;
+		update_option( 'ovb_settings', $settings );
+		$uploads  = wp_get_upload_dir();
+		$fixture  = $uploads['basedir'] . '/ovb-s3-fixture';
+		$ovb_s3_files[] = $fixture;
+		ovb_arc_mkdir( $fixture );
+		ovb_arc_random_file( $fixture . '/a.bin', 8 );
+		ovb_arc_random_file( $fixture . '/b.bin', 8 );
+		ovb_arc_random_file( $fixture . '/c.bin', 6 );
+
+		$order = array( 'violation' => false, 'slices' => 0 );
+		$ovb_s3_observer = static function ( $inner ) use ( &$order, $frepo, $d_good ) {
+			return new OvbUploadObserver(
+				$inner,
+				static function ( JobContext $c ) use ( &$order, $frepo, $d_good ) {
+					++$order['slices'];
+					$rows       = $frepo->for_backup_and_destination( $c->backup_id(), $d_good );
+					$parts_done = true;
+					foreach ( $rows as $r ) {
+						if ( 'manifest.json' !== $r['file_name'] && 'done' !== $r['upload_status'] ) {
+							$parts_done = false;
+						}
+					}
+					foreach ( $rows as $r ) {
+						if ( 'manifest.json' === $r['file_name'] && in_array( $r['upload_status'], array( 'uploading', 'done' ), true ) && ! $parts_done ) {
+							$order['violation'] = true;
+						}
+					}
+				}
+			);
+		};
+		$clock   = 0.0;
+		$runner  = new JobRunner(
+			null,
+			null,
+			static function () use ( &$clock ) {
+				return new Budget(
+					40,
+					PHP_INT_MAX,
+					static function () use ( &$clock ) {
+						$clock += 1.0;
+						return $clock;
+					}
+				);
+			}
+		);
+		$job              = $ubk->create( array( 'note' => $ovb_marker . ' s3 job', 'contents' => array( 'db' => true, 'uploads' => true ), 'format' => $format ) );
+		$ovb_s3_backups[] = $job;
+		$runner->start( $job, array( 'destinations' => array( $d_good ) ) );
+		$outcomes = array();
+		for ( $i = 0; $i < 900; $i++ ) {
+			ovb_clear_pending( $job );
+			$out        = $runner->run( $job );
+			$outcomes[] = $out;
+			if ( ! in_array( $out, array( 'continued', 'waiting' ), true ) ) {
+				break;
+			}
+		}
+		$row      = $ubk->find( $job );
+		$meta     = $ubk->load_state( $job )->get_meta();
+		$folder   = Paths::build_backup_folder_name( $row['created_at'], $row['uuid'] );
+		$host     = RemotePath::site_host( site_url() );
+		$s3       = $registry->create( $drepo->find( $d_good ) );
+		$locals   = $frepo->for_backup_and_destination( $job, 0 );
+		$remotes  = array();
+		foreach ( $frepo->for_backup_and_destination( $job, $d_good ) as $r ) {
+			$remotes[ $r['file_name'] ] = $r;
+		}
+		ovb_check( 's3: a full backup with the s3 destination selected ends complete', 'complete' === $row['status'] && ! isset( $meta['result'] ) && 'done' === ( isset( $meta['upload'][ $d_good ]['s'] ) ? $meta['upload'][ $d_good ]['s'] : '' ), $row['status'] . ' ' . wp_json_encode( array_count_values( $outcomes ) ) . ' ' . wp_json_encode( isset( $meta['upload'] ) ? $meta['upload'] : null ) );
+		ovb_check( sprintf( 's3: the upload needed %d slices (more than 5) and manifest.json was never started before every part was done', $order['slices'] ), $order['slices'] > 5 && ! $order['violation'] );
+		$all_ok = count( $locals ) >= 4 && count( $locals ) === count( $remotes );
+		$detail = array();
+		foreach ( $locals as $name => $local ) {
+			$remote_row = isset( $remotes[ $local['file_name'] ] ) ? $remotes[ $local['file_name'] ] : null;
+			$ref        = RemotePath::file( $host, $folder, $local['file_name'] );
+			$path       = Paths::backup_dir( $row['created_at'], $row['uuid'] ) . '/' . $local['file_name'];
+			if ( null === $remote_row || 'done' !== $remote_row['upload_status'] || $remote_row['remote_ref'] !== $ref || '' !== $remote_row['upload_session'] || ovb_s3_sha256( $s3, $ref ) !== hash_file( 'sha256', $path ) ) {
+				$all_ok   = false;
+				$detail[] = $local['file_name'];
+			}
+		}
+		ovb_check( 's3: every archive part and manifest.json in the bucket equals the local file by sha256; rows are done with remote_ref and no session', $all_ok, wp_json_encode( $detail ) );
+		$remote_manifest = '';
+		$s3->download( RemotePath::file( $host, $folder, 'manifest.json' ), static function ( $chunk ) use ( &$remote_manifest ) {
+			$remote_manifest .= $chunk;
+		} );
+		$decoded = json_decode( $remote_manifest, true );
+		ovb_check( 's3: the uploaded manifest.json is the real manifest of this backup', is_array( $decoded ) && isset( $decoded['parts'] ) && count( $decoded['parts'] ) === count( $locals ) - 1 );
+		$state_json = (string) $wpdb->get_var( $wpdb->prepare( "SELECT state FROM {$ovb_prefix}backups WHERE id = %d", $job ) );
+		$logs_blob  = implode( "\n", (array) $wpdb->get_col( $wpdb->prepare( "SELECT CONCAT(message, ' ', COALESCE(context, '')) FROM {$ovb_prefix}logs WHERE backup_id = %d", $job ) ) );
+		ovb_check( 's3: no key or secret reaches the job state or the logs', false === strpos( $state_json . $logs_blob, $ovb_s3_secret ) && false === strpos( $state_json . $logs_blob, $ovb_s3_access ) );
+		$s3->delete( RemotePath::folder( $host, $folder ) );
+		ovb_check( 's3: deleting the remote backup folder removes every object of it', array() === iterator_to_array( $s3->list( RemotePath::folder( $host, $folder ) ), false ) );
+
+		// A destination with a wrong secret next to the working one: partial, safe message, local copy fine.
+		$job2              = $ubk->create( array( 'note' => $ovb_marker . ' s3 wrong', 'contents' => array( 'db' => true ), 'format' => $format ) );
+		$ovb_s3_backups[]  = $job2;
+		$ovb_s3_observer   = null;
+		$runner2           = new JobRunner(
+			null,
+			null,
+			static function () {
+				return new Budget( 600, PHP_INT_MAX );
+			}
+		);
+		$runner2->start( $job2, array( 'destinations' => array( $d_wrong, $d_good ) ) );
+		$out2 = array();
+		for ( $i = 0; $i < 200; $i++ ) {
+			ovb_clear_pending( $job2 );
+			$o      = $runner2->run( $job2 );
+			$out2[] = $o;
+			if ( ! in_array( $o, array( 'continued', 'waiting' ), true ) ) {
+				break;
+			}
+		}
+		$row2   = $ubk->find( $job2 );
+		$meta2  = $ubk->load_state( $job2 )->get_meta();
+		$error2 = (string) ( isset( $meta2['upload'][ $d_wrong ]['e'] ) ? $meta2['upload'][ $d_wrong ]['e'] : '' );
+		$local2 = $frepo->for_backup_and_destination( $job2, 0 );
+		$blob2  = (string) $wpdb->get_var( $wpdb->prepare( "SELECT state FROM {$ovb_prefix}backups WHERE id = %d", $job2 ) ) . implode( "\n", (array) $wpdb->get_col( $wpdb->prepare( "SELECT CONCAT(message, ' ', COALESCE(context, '')) FROM {$ovb_prefix}logs WHERE backup_id = %d", $job2 ) ) );
+		ovb_check( 's3: with a wrong-secret destination the backup is partial, that destination failed with a signature message, the good one is done', 'partial' === $row2['status'] && 'failed' === ( isset( $meta2['upload'][ $d_wrong ]['s'] ) ? $meta2['upload'][ $d_wrong ]['s'] : '' ) && 'done' === ( isset( $meta2['upload'][ $d_good ]['s'] ) ? $meta2['upload'][ $d_good ]['s'] : '' ) && false !== stripos( $error2, 'signature' ) && ! in_array( 'waiting', $out2, true ), $row2['status'] . ' ' . $error2 . ' ' . wp_json_encode( array_count_values( $out2 ) ) );
+		ovb_check( 's3: the wrong secret appears nowhere in the state or the logs; the local copy is fine', false === strpos( $blob2, $secret2 ) && count( $local2 ) >= 2 && array( 'done' ) === array_values( array_unique( array_column( $local2, 'upload_status' ) ) ) );
+		$folder2 = Paths::build_backup_folder_name( $row2['created_at'], $row2['uuid'] );
+		$s3->delete( RemotePath::folder( $host, $folder2 ) );
+		$ovb_s3_observer = null;
+		ovb_arc_rm( $fixture );
+		update_option( 'ovb_settings', $ovb_s3_settings );
+	}//end if
+} catch ( \Throwable $e ) {
+	ovb_check( 's3: no uncaught exception', false, get_class( $e ) . ': ' . $e->getMessage() . ' @ ' . basename( $e->getFile() ) . ':' . $e->getLine() );
+} finally {
+	$ovb_s3_observer = null;
+	remove_filter( 'ovb_engine_steps', $ovb_s3_hook, 30 );
+	update_option( 'ovb_settings', $ovb_s3_settings );
+	// Remove every object (also leftovers of a failed run), then the bucket.
+	if ( '' !== $ovb_s3_endpoint ) {
+		try {
+			$cleaner = new S3Client( S3Presets::resolve( array_merge( $base, array( 'prefix' => '' ) ) ), new SigV4Signer( $ovb_s3_access, $ovb_s3_secret, 'us-east-1' ) );
+			foreach ( iterator_to_array( $cleaner->list_objects_v2( '' ), false ) as $object ) {
+				$cleaner->delete_object( $object['key'] );
+			}
+			foreach ( iterator_to_array( $cleaner->list_multipart_uploads( '' ), false ) as $upload ) {
+				$cleaner->abort_multipart_upload( $upload['key'], $upload['upload_id'] );
+			}
+		} catch ( \Throwable $cleanup_error ) {
+			unset( $cleanup_error );
+		}
+		$dropped = ovb_s3_bucket_call( 'DELETE', $ovb_s3_endpoint, $ovb_s3_access, $ovb_s3_secret, $ovb_s3_bucket );
+		ovb_check( 's3: the bucket was emptied and removed again', in_array( $dropped, array( 200, 204 ), true ), (string) $dropped );
+	}
+	foreach ( $ovb_s3_files as $leftover_path ) {
+		ovb_arc_rm( $leftover_path );
+	}
+	foreach ( $ovb_s3_backups as $cleanup_id ) {
+		$backup_row = $wpdb->get_row( $wpdb->prepare( "SELECT created_at, uuid FROM {$ovb_prefix}backups WHERE id = %d", $cleanup_id ), ARRAY_A );
+		if ( $backup_row ) {
+			ovb_arc_rm( Paths::backups_dir() . '/' . Paths::build_backup_folder_name( $backup_row['created_at'], $backup_row['uuid'] ) );
+		}
+		ovb_clear_pending( $cleanup_id );
+		$wpdb->delete( $ovb_prefix . 'backup_files', array( 'backup_id' => $cleanup_id ) );
+		$wpdb->delete( $ovb_prefix . 'logs', array( 'backup_id' => $cleanup_id ) );
+		$wpdb->delete( $ovb_prefix . 'backups', array( 'id' => $cleanup_id ) );
+		$wpdb->delete( $wpdb->options, array( 'option_name' => 'ovb_lock_' . $cleanup_id ) );
+	}
+	foreach ( $ovb_s3_dest_ids as $cleanup_id ) {
+		$wpdb->delete( $ovb_prefix . 'destinations', array( 'id' => $cleanup_id ) );
+	}
+	foreach ( glob( Paths::tmp_dir() . '/*', GLOB_ONLYDIR ) ?: array() as $leftover_dir ) {
+		if ( Manifest::is_valid_uuid( basename( $leftover_dir ) ) ) {
+			CleanupStep::remove_tree( $leftover_dir );
+		}
+	}
+}
+$s3_leftovers = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$ovb_prefix}backups WHERE note LIKE %s", $wpdb->esc_like( $ovb_marker ) . '%' ) )
+	+ (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}destinations WHERE label LIKE 'Matrix %'" )
+	+ count( glob( Paths::tmp_dir() . '/*', GLOB_ONLYDIR ) ?: array() )
+	+ count( glob( Paths::backups_dir() . '/*', GLOB_ONLYDIR ) ?: array() )
+	+ (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'ovb\\_lock\\_%'" );
+ovb_check( 's3: destinations, backups, backup folders, fixtures, rows and locks cleaned up', 0 === $s3_leftovers, (string) $s3_leftovers );
+echo sprintf( "--- s3 section: peak memory %.1f MiB (was %.1f MiB before it); memory_limit in this process: %s\n", memory_get_peak_usage( true ) / 1048576, $ovb_s3_peak_before / 1048576, ini_get( 'memory_limit' ) );
+
+// 17. Destinations REST routes and validators in real WordPress (Milestone 4, step 4c). The same flows run over real HTTP with a
+// nonce in http-e2e.sh; here the routes are dispatched in-process as the admin user.
+use OpenVault\Backup\Destinations\DestinationPresenter;
+use OpenVault\Backup\Destinations\DestinationSettings;
+
+$ovb_d_ids    = array();
+$ovb_d_backup = 0;
+$ovb_d_dir    = WP_CONTENT_DIR . '/ovb-matrix-4c-' . strtolower( wp_generate_password( 6, false ) );
+$ovb_d_rest   = static function ( $method, $route, $body = null ) {
+	$request = new WP_REST_Request( $method, '/ovb/v1' . $route );
+	if ( null !== $body ) {
+		$request->set_header( 'content-type', 'application/json' );
+		$request->set_body( wp_json_encode( $body ) );
+	}
+	return rest_do_request( $request );
+};
+$ovb_d_count  = static function () use ( $wpdb, $ovb_prefix ) {
+	return (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}destinations" );
+};
+$ovb_d_raw    = static function ( $id ) use ( $wpdb, $ovb_prefix ) {
+	return (string) $wpdb->get_var( $wpdb->prepare( "SELECT credentials FROM {$ovb_prefix}destinations WHERE id = %d", $id ) );
+};
+$ovb_d_secret = 'Matrix4cSecret-' . wp_generate_password( 14, false );
+$ovb_d_s3     = array(
+	'preset'                 => 'custom',
+	'endpoint'               => 'http://s3srv:8333',
+	'bucket'                 => 'matrix-4c-bucket',
+	'prefix'                 => 'p',
+	'allow_insecure_http'    => true,
+	'allow_private_endpoint' => true,
+);
+
+try {
+	// Validators against the real LocalDestination rules (the matrix runs as root, so "not writable" is not used here).
+	foreach ( array( ABSPATH, ABSPATH . 'wp-admin', ABSPATH . 'wp-includes/x', Paths::tmp_dir(), '../etc', 'relative/dir', '/a/../b' ) as $bad_path ) {
+		$refused = false;
+		try {
+			DestinationSettings::validate_settings( 'local', array( 'path' => $bad_path ) );
+		} catch ( DestinationException $e ) {
+			$refused = false === strpos( $e->getMessage(), ABSPATH ) && false === strpos( $e->getMessage(), WP_CONTENT_DIR );
+		}
+		ovb_check( 'dest 4c: a local folder of ' . ( 0 === strpos( $bad_path, '/' ) ? substr( str_replace( ABSPATH, '[wp]/', $bad_path ), 0, 40 ) : $bad_path ) . ' is refused without showing a path', $refused );
+	}
+	$good_local = DestinationSettings::validate_settings( 'local', array( 'path' => $ovb_d_dir ) );
+	ovb_check( 'dest 4c: a folder inside wp-content is accepted, created and guarded', array( 'path' => $ovb_d_dir ) === $good_local && is_dir( $ovb_d_dir ) && is_file( $ovb_d_dir . '/.htaccess' ) );
+
+	// REST: create (local), list, no credentials anywhere.
+	$before = $ovb_d_count();
+	$res    = $ovb_d_rest( 'POST', '/destinations', array( 'type' => 'local', 'label' => "Matrix 4c local '); DROP TABLE x;--", 'settings' => array( 'path' => $ovb_d_dir ) ) );
+	$data   = $res->get_data();
+	ovb_check( 'dest 4c: POST /destinations creates a local destination (201, SQL metacharacters in the label stay inert)', 201 === $res->get_status() && "Matrix 4c local '); DROP TABLE x;--" === $data['label'] && $before + 1 === $ovb_d_count(), wp_json_encode( $data ) );
+	$ovb_d_ids[] = (int) $data['id'];
+	ovb_check( 'dest 4c: the created item has no credentials key and says so', ! array_key_exists( 'credentials', $data ) && false === $data['has_credentials'] && 'new' === $data['status'] );
+
+	$res  = $ovb_d_rest( 'POST', '/destinations', array( 'type' => 's3', 'label' => 'Matrix 4c s3', 'settings' => $ovb_d_s3, 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0001', 'secret_key' => $ovb_d_secret ) ) );
+	$data = $res->get_data();
+	ovb_check( 'dest 4c: POST /destinations creates an s3 destination and the response holds no secret', 201 === $res->get_status() && true === $data['has_credentials'] && false === strpos( wp_json_encode( $data ), $ovb_d_secret ) && false === strpos( wp_json_encode( $data ), 'AKIAMATRIX4C0001' ), wp_json_encode( $data ) );
+	$s3_id       = (int) $data['id'];
+	$ovb_d_ids[] = $s3_id;
+	$raw         = $ovb_d_raw( $s3_id );
+	ovb_check( 'dest 4c: the credentials column is an ovb1: envelope without the secret', 0 === strpos( $raw, 'ovb1:' ) && false === strpos( $raw, $ovb_d_secret ) );
+
+	$res = $ovb_d_rest( 'GET', '/destinations' );
+	ovb_check( 'dest 4c: GET /destinations lists both without credentials', 200 === $res->get_status() && count( $res->get_data() ) >= 2 && false === strpos( wp_json_encode( $res->get_data() ), $ovb_d_secret ) && false === strpos( wp_json_encode( $res->get_data() ), 'ovb1:' ) );
+
+	// Hostile creates store nothing.
+	$before = $ovb_d_count();
+	$hostile = array(
+		array( 'type' => 's3', 'label' => 'x', 'settings' => array_merge( $ovb_d_s3, array( 'evil' => 1 ) ), 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0001', 'secret_key' => $ovb_d_secret ) ),
+		array( 'type' => 's3', 'label' => 'x', 'settings' => array_merge( $ovb_d_s3, array( 'bucket' => "B'; DROP TABLE wp_options;--" ) ), 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0001', 'secret_key' => $ovb_d_secret ) ),
+		array( 'type' => 's3', 'label' => 'x', 'settings' => array_merge( $ovb_d_s3, array( 'prefix' => '../../etc' ) ), 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0001', 'secret_key' => $ovb_d_secret ) ),
+		array( 'type' => 's3', 'label' => 'x', 'settings' => array_merge( $ovb_d_s3, array( 'endpoint' => 'http://169.254.169.254/' ) ), 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0001', 'secret_key' => $ovb_d_secret ) ),
+		array( 'type' => 's3', 'label' => 'x', 'settings' => $ovb_d_s3 ),
+		array( 'type' => 's3', 'label' => '', 'settings' => $ovb_d_s3, 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0001', 'secret_key' => $ovb_d_secret ) ),
+		array( 'type' => 'gdrive', 'label' => 'x', 'settings' => array() ),
+		array( 'type' => 'local', 'label' => 'x', 'settings' => array( 'path' => ABSPATH . 'wp-admin' ) ),
+		array( 'type' => 'local', 'label' => 'x', 'settings' => array( 'path' => '/a/../etc' ) ),
+		array( 'type' => 'local', 'label' => 'x', 'settings' => array(), 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0001', 'secret_key' => $ovb_d_secret ) ),
+	);
+	$codes   = array();
+	$leak    = false;
+	foreach ( $hostile as $payload ) {
+		$res     = $ovb_d_rest( 'POST', '/destinations', $payload );
+		$codes[] = $res->get_status();
+		$leak    = $leak || false !== strpos( wp_json_encode( $res->get_data() ), $ovb_d_secret ) || false !== strpos( wp_json_encode( $res->get_data() ), 'AKIAMATRIX4C0001' );
+	}
+	ovb_check( 'dest 4c: ten hostile create payloads are all 400 and nothing is stored', array_fill( 0, 10, 400 ) === $codes && $before === $ovb_d_count(), implode( ',', $codes ) );
+	ovb_check( 'dest 4c: no refusal message contains the submitted keys', ! $leak );
+
+	// Update: label only keeps the credentials; new keys replace them; an SSRF endpoint is refused and changes nothing.
+	$before_raw = $ovb_d_raw( $s3_id );
+	$res        = $ovb_d_rest( 'POST', '/destinations/' . $s3_id, array( 'label' => 'Matrix 4c renamed' ) );
+	ovb_check( 'dest 4c: updating only the label keeps the stored credentials byte for byte', 200 === $res->get_status() && 'Matrix 4c renamed' === $res->get_data()['label'] && $before_raw === $ovb_d_raw( $s3_id ) && true === $res->get_data()['has_credentials'] );
+	$settings_before = ( new DestinationsRepository() )->find( $s3_id )['settings'];
+	$res             = $ovb_d_rest( 'POST', '/destinations/' . $s3_id, array( 'settings' => array_merge( $ovb_d_s3, array( 'endpoint' => 'http://169.254.169.254/' ) ) ) );
+	ovb_check( 'dest 4c: updating the settings with the metadata address is 400 and changes nothing', 400 === $res->get_status() && $settings_before === ( new DestinationsRepository() )->find( $s3_id )['settings'] );
+	$res = $ovb_d_rest( 'POST', '/destinations/' . $s3_id, array( 'credentials' => array( 'secret_key' => 'only-the-secret-12345' ) ) );
+	ovb_check( 'dest 4c: replacing only one key is refused (both are needed)', 400 === $res->get_status() && $before_raw === $ovb_d_raw( $s3_id ) );
+	$res = $ovb_d_rest( 'POST', '/destinations/' . $s3_id, array() );
+	ovb_check( 'dest 4c: an update with nothing to change is 400', 400 === $res->get_status() );
+	$res = $ovb_d_rest( 'POST', '/destinations/' . $s3_id, array( 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0002', 'secret_key' => $ovb_d_secret . 'B' ) ) );
+	ovb_check( 'dest 4c: new keys replace the stored ones and reset the status to new', 200 === $res->get_status() && $before_raw !== $ovb_d_raw( $s3_id ) && 'new' === $res->get_data()['status'] && false === strpos( wp_json_encode( $res->get_data() ), $ovb_d_secret ) );
+	$res = $ovb_d_rest( 'POST', '/destinations/999999', array( 'label' => 'x' ) );
+	ovb_check( 'dest 4c: updating an unknown destination is 404', 404 === $res->get_status() );
+
+	// Test: a local destination works; an unreadable credential gives a clear needs_reconnect answer without leaking anything.
+	$res = $ovb_d_rest( 'POST', '/destinations/' . $ovb_d_ids[0] . '/test' );
+	ovb_check( 'dest 4c: testing the local destination works and is stored as connected', 200 === $res->get_status() && true === $res->get_data()['ok'] && 'connected' === $res->get_data()['destination']['status'] && null !== $res->get_data()['destination']['last_tested_at'], wp_json_encode( $res->get_data() ) );
+	$wpdb->update( $ovb_prefix . 'destinations', array( 'credentials' => 'ovb1:not-a-valid-envelope' ), array( 'id' => $s3_id ) );
+	$res  = $ovb_d_rest( 'POST', '/destinations/' . $s3_id . '/test' );
+	$data = $res->get_data();
+	ovb_check( 'dest 4c: unreadable credentials: ok=false, status needs_reconnect, an actionable message, nothing leaked', 200 === $res->get_status() && false === $data['ok'] && 'needs_reconnect' === $data['destination']['status'] && false !== stripos( $data['message'], 'enter the keys again' ) && false === strpos( wp_json_encode( $data ), 'not-a-valid-envelope' ), wp_json_encode( $data ) );
+	$res = $ovb_d_rest( 'POST', '/destinations/' . $s3_id . '/test' );
+	ovb_check( 'dest 4c: testing a needs_reconnect destination again gives the same clear answer', false === $res->get_data()['ok'] && 'needs_reconnect' === $res->get_data()['destination']['status'] );
+	$res = $ovb_d_rest( 'POST', '/destinations/' . $s3_id, array( 'credentials' => array( 'access_key' => 'AKIAMATRIX4C0003', 'secret_key' => $ovb_d_secret . 'C' ) ) );
+	ovb_check( 'dest 4c: entering the keys again repairs a needs_reconnect destination (status new)', 200 === $res->get_status() && 'new' === $res->get_data()['status'] && 0 === strpos( $ovb_d_raw( $s3_id ), 'ovb1:' ) );
+	$res = $ovb_d_rest( 'POST', '/destinations/999999/test' );
+	ovb_check( 'dest 4c: testing an unknown destination is 404', 404 === $res->get_status() );
+
+	// Presenter on real rows: no credentials key, the last error is scrubbed.
+	$repo_17 = new DestinationsRepository();
+	$repo_17->mark_tested( $s3_id, false, 'Denied Authorization: Bearer abcdef0123456789abcdef secret_key=Hunter2Hunter2' );
+	$item = DestinationPresenter::item( $repo_17->find( $s3_id ) );
+	ovb_check( 'dest 4c: the presenter scrubs the last error of a real row and has no credentials', 'error' === $item['status'] && false === strpos( (string) $item['last_error'], 'abcdef0123456789' ) && false === strpos( (string) $item['last_error'], 'Hunter2' ) && ! array_key_exists( 'credentials', $item ) );
+
+	// Delete: refused while a queued backup uses it, allowed afterwards. Remote files are never touched here (no network call).
+	$ovb_d_backup = ( new BackupsRepository() )->create( array( 'note' => $ovb_marker . ' dest-delete', 'contents' => array( 'db' => true ), 'format' => ( new CapabilityDetector() )->default_format() ) );
+	( new JobRunner() )->start( $ovb_d_backup, array( 'destinations' => array( $ovb_d_ids[0] ) ) );
+	$res = $ovb_d_rest( 'DELETE', '/destinations/' . $ovb_d_ids[0] );
+	ovb_check( 'dest 4c: DELETE is 409 while a queued backup uses the destination, and the row stays', 409 === $res->get_status() && null !== $repo_17->find( $ovb_d_ids[0] ) );
+	$res = $ovb_d_rest( 'DELETE', '/destinations/' . $s3_id );
+	ovb_check( 'dest 4c: DELETE of an unused destination removes the row and its credentials', 200 === $res->get_status() && null === $repo_17->find( $s3_id ) && '' === $ovb_d_raw( $s3_id ) );
+	( new JobRunner() )->cancel( $ovb_d_backup );
+	$res = $ovb_d_rest( 'DELETE', '/destinations/' . $ovb_d_ids[0] );
+	ovb_check( 'dest 4c: after the backup is cancelled the destination can be deleted', 200 === $res->get_status() && null === $repo_17->find( $ovb_d_ids[0] ) );
+	$res = $ovb_d_rest( 'DELETE', '/destinations/' . $ovb_d_ids[0] );
+	ovb_check( 'dest 4c: deleting it twice is 404', 404 === $res->get_status() );
+
+	// Capability: a subscriber is refused on every route.
+	$subscriber = wp_insert_user( array( 'user_login' => 'ovb4c_sub_' . wp_generate_password( 4, false ), 'user_pass' => wp_generate_password(), 'role' => 'subscriber' ) );
+	wp_set_current_user( (int) $subscriber );
+	$statuses = array(
+		$ovb_d_rest( 'GET', '/destinations' )->get_status(),
+		$ovb_d_rest( 'POST', '/destinations', array( 'type' => 'local', 'label' => 'x', 'settings' => array() ) )->get_status(),
+		$ovb_d_rest( 'POST', '/destinations/1', array( 'label' => 'x' ) )->get_status(),
+		$ovb_d_rest( 'POST', '/destinations/1/test' )->get_status(),
+		$ovb_d_rest( 'DELETE', '/destinations/1' )->get_status(),
+	);
+	wp_set_current_user( 1 );
+	if ( is_int( $subscriber ) ) {
+		wp_delete_user( $subscriber );
+	}
+	ovb_check( 'dest 4c: a subscriber gets 403 on every destinations route', array( 403, 403, 403, 403, 403 ) === $statuses, implode( ',', $statuses ) );
+} catch ( \Throwable $e ) {
+	ovb_check( 'dest 4c: no uncaught exception', false, get_class( $e ) . ': ' . $e->getMessage() . ' @ ' . basename( $e->getFile() ) . ':' . $e->getLine() );
+} finally {
+	wp_set_current_user( 1 );
+	if ( $ovb_d_backup > 0 ) {
+		$backup_row = $wpdb->get_row( $wpdb->prepare( "SELECT created_at, uuid FROM {$ovb_prefix}backups WHERE id = %d", $ovb_d_backup ), ARRAY_A );
+		if ( $backup_row ) {
+			ovb_arc_rm( Paths::backups_dir() . '/' . Paths::build_backup_folder_name( $backup_row['created_at'], $backup_row['uuid'] ) );
+		}
+		ovb_clear_pending( $ovb_d_backup );
+		$wpdb->delete( $ovb_prefix . 'backup_files', array( 'backup_id' => $ovb_d_backup ) );
+		$wpdb->delete( $ovb_prefix . 'logs', array( 'backup_id' => $ovb_d_backup ) );
+		$wpdb->delete( $ovb_prefix . 'backups', array( 'id' => $ovb_d_backup ) );
+		$wpdb->delete( $wpdb->options, array( 'option_name' => 'ovb_lock_' . $ovb_d_backup ) );
+	}
+	foreach ( $ovb_d_ids as $cleanup_id ) {
+		$wpdb->delete( $ovb_prefix . 'destinations', array( 'id' => $cleanup_id ) );
+	}
+	ovb_arc_rm( $ovb_d_dir );
+	foreach ( glob( Paths::tmp_dir() . '/*', GLOB_ONLYDIR ) ?: array() as $leftover_dir ) {
+		if ( Manifest::is_valid_uuid( basename( $leftover_dir ) ) ) {
+			CleanupStep::remove_tree( $leftover_dir );
+		}
+	}
+}
+ovb_check( 'dest 4c: destinations, backup, folders and locks cleaned up', 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}destinations WHERE label LIKE 'Matrix 4c%'" ) && ! file_exists( $ovb_d_dir ) && 0 === count( glob( Paths::backups_dir() . '/*', GLOB_ONLYDIR ) ?: array() ) && 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'ovb\\_lock\\_%'" ) );
 
 // 11. Plugin did not leave an error behind.
 ovb_check( 'no database error', '' === $wpdb->last_error, $wpdb->last_error );

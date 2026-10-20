@@ -16,12 +16,20 @@ PHPCS with WordPress Coding Standards, PHPStan level 5+, Plugin Check plugin, Gi
 ## Release
 - **Always downloadable** (public repo): every tag `vX.Y.Z` publishes a GitHub Release with `openvault-backup.zip` (stable name), `openvault-backup-X.Y.Z.zip` and a `.sha256`; `main` keeps a rolling `dev` pre-release (`openvault-backup-dev.zip`). The README and the website link to `releases/latest/download/openvault-backup.zip`. The zip is built by `bin/build-zip.sh` from `.distignore`, and the Docker matrix installs that exact zip.
 - Release checklist: bump `Version` in `openvault-backup.php`, `Stable tag` in `readme.txt` and `OVB_VERSION`/`tests/phpstan-bootstrap.php`, update `CHANGELOG.md`, tag `vX.Y.Z` (the workflow refuses mismatched versions).
-- **Release 0.1.0 checklist** (pre-alpha, local backups only):
+- **Release 0.1.0 checklist** (superseded: 0.1.0 was never tagged or published; its changes ship in 0.2.0):
   - [ ] `Version` in `openvault-backup.php`, `Stable tag` in `readme.txt`, `PLUGIN_VERSION` in `website/src/config/site.ts` are all `0.1.0`.
   - [ ] `CHANGELOG.md` has the `## 0.1.0 - pre-alpha` section; `website/src/data/features.ts` marks only what truly works as `available` with `since: '0.1.0'`.
   - [ ] `composer run lint && composer run analyse && composer run test` green; website `npm run build` and `npx vitest run` green.
   - [ ] Tag and push: `git tag v0.1.0 && git push origin v0.1.0`. The workflow gates on the `min-supported` and `php84` matrix profiles, then publishes the zip, the versioned zip and the `.sha256`.
   - [ ] Download the published zip, install it on a clean WordPress, run one backup, download it.
+  - [ ] Deploy the site only after the release exists (its download links and Available badges depend on it).
+- **Release 0.2.0 checklist** (pre-alpha, local + S3-compatible destinations):
+  - [ ] `Version` in `openvault-backup.php`, `Stable tag` in `readme.txt`, `PLUGIN_VERSION` in `website/src/config/site.ts` are all `0.2.0` (also `OVB_VERSION` and `tests/phpstan-bootstrap.php`; `OVB_DB_VERSION` unchanged).
+  - [ ] `CHANGELOG.md` has the `## 0.2.0 - pre-alpha` section with known limitations; `website/src/data/features.ts` marks only what truly works as `available` with `since: '0.2.0'`.
+  - [ ] `composer run lint && composer run analyse && composer run test` green on PHP 7.4 and 8.3; website `npm run build` and `npx vitest run` green.
+  - [ ] Once: `git rm --cached .phpunit.result.cache` (it is now in `.gitignore`).
+  - [ ] Tag and push: `git tag v0.2.0 && git push origin v0.2.0`. The workflow gates on the `min-supported` and `php84` matrix profiles, then publishes the zip, the versioned zip and the `.sha256`.
+  - [ ] Download the published zip, install it on a clean WordPress, add a Local destination (a folder outside the plugin folder), run one backup to it, download it.
   - [ ] Deploy the site only after the release exists (its download links and Available badges depend on it).
 - GitHub repo first (issues, contributing guide, code of conduct).
 - WordPress.org submission at 1.0: `readme.txt`, GPLv2+, no trademark at slug start, no external calls without user action.

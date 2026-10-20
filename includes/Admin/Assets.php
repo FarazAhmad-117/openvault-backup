@@ -5,7 +5,7 @@
  * Phase: MVP
  *
  * Purpose: Enqueue assets/admin/css/admin.css on the plugin's own screens and the page scripts only on the screens
- * that use them (Backup Now, History). Nothing is loaded anywhere else in the admin, no build step, no external
+ * that use them (Backup Now, History, Destinations). Nothing is loaded anywhere else in the admin, no build step, no external
  * requests. The REST nonce and all strings reach the scripts through wp_localize_script().
  *
  * @package OpenVault\Backup
@@ -69,6 +69,9 @@ class Assets {
 		if ( 'openvault-backup-now' === $slug ) {
 			wp_enqueue_script( 'ovb-backup-now', OVB_URL . 'assets/admin/js/backup-now.js', array(), OVB_VERSION, true );
 			wp_localize_script( 'ovb-backup-now', 'ovbBackupNow', $this->config( $this->backup_now_strings() ) );
+		} elseif ( 'openvault-destinations' === $slug ) {
+			wp_enqueue_script( 'ovb-destinations', OVB_URL . 'assets/admin/js/destinations.js', array(), OVB_VERSION, true );
+			wp_localize_script( 'ovb-destinations', 'ovbDestinations', $this->config( $this->destinations_strings() ) );
 		} elseif ( 'openvault-backups' === $slug ) {
 			wp_enqueue_script( 'ovb-history', OVB_URL . 'assets/admin/js/history.js', array(), OVB_VERSION, true );
 			wp_localize_script( 'ovb-history', 'ovbHistory', $this->config( $this->history_strings() ) );
@@ -114,9 +117,37 @@ class Assets {
 			'warnings'     => __( '%d warnings were logged (for example files that could not be read).', 'openvault-backup' ),
 			/* translators: %s: estimated time left, for example "about 2 min". */
 			'eta'          => __( '%s left', 'openvault-backup' ),
+			'sent_done'    => __( 'Uploaded', 'openvault-backup' ),
+			'sent_failed'  => __( 'Failed', 'openvault-backup' ),
+			'sent_active'  => __( 'Uploading', 'openvault-backup' ),
+			'sent_pending' => __( 'Waiting', 'openvault-backup' ),
 			'about'        => __( 'about', 'openvault-backup' ),
 			'min'          => __( 'min', 'openvault-backup' ),
 			'sec'          => __( 'sec', 'openvault-backup' ),
+		);
+	}
+
+	/**
+	 * Strings of the Destinations script.
+	 *
+	 * @return array<string,string>
+	 */
+	private function destinations_strings() {
+		return array(
+			'noFetch'       => __( 'This browser is too old for this page. Please update your browser.', 'openvault-backup' ),
+			'requestError'  => __( 'The request failed. Check your connection and try again.', 'openvault-backup' ),
+			'testing'       => __( 'Testing the connection...', 'openvault-backup' ),
+			'testOk'        => __( 'Connection works.', 'openvault-backup' ),
+			'testFailed'    => __( 'Connection failed.', 'openvault-backup' ),
+			/* translators: %s: date and time of the last connection test. */
+			'tested'        => __( 'Last tested: %s', 'openvault-backup' ),
+			'never'         => __( 'Never tested.', 'openvault-backup' ),
+			/* translators: %s: destination name. */
+			'confirmRemove' => __( 'Remove the destination "%s"? Its saved keys are deleted from this site. Backups already stored there are not deleted.', 'openvault-backup' ),
+			'removed'       => __( 'The destination was removed. Files already stored there were not touched.', 'openvault-backup' ),
+			'created'       => __( 'The destination was saved. Use "Test connection" to check that it works.', 'openvault-backup' ),
+			'updated'       => __( 'The destination was updated. Use "Test connection" to check that it works.', 'openvault-backup' ),
+			'needName'      => __( 'Enter a name for this destination.', 'openvault-backup' ),
 		);
 	}
 

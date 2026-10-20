@@ -30,7 +30,7 @@ const columns = [
     <div class="cols">
       <div class="about">
         <p class="name">{SITE_NAME}</p>
-        {preAlpha && <p class="muted small honest">OpenVault Backup is pre-alpha software. It can create local backups and let you download them, but it cannot restore, schedule or send backups to Google Drive or S3 yet.</p>}
+        {preAlpha && <p class="muted small honest">OpenVault Backup is pre-alpha software. It can back up to your server, S3-compatible storage or a folder and let you download them, but it cannot restore, schedule or send backups to Google Drive yet.</p>}
       </div>
       {columns.map((c) => (
         <nav aria-label={c.title}>

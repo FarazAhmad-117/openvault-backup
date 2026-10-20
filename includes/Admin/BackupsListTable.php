@@ -15,6 +15,8 @@ namespace OpenVault\Backup\Admin;
 
 use OpenVault\Backup\Database\BackupFilesRepository;
 use OpenVault\Backup\Database\BackupsRepository;
+use OpenVault\Backup\Database\DestinationsRepository;
+use OpenVault\Backup\Engine\UploadSummary;
 use OpenVault\Backup\Security\DownloadController;
 
 defined( 'ABSPATH' ) || exit;
@@ -32,6 +34,13 @@ class BackupsListTable extends \WP_List_Table {
 	 * @var BackupFilesRepository
 	 */
 	private $files;
+
+	/**
+	 * Destination labels by id (loaded once, on first use).
+	 *
+	 * @var array<int,string>|null
+	 */
+	private $labels;
 
 	/**
 	 * Constructor.
@@ -176,7 +185,33 @@ class BackupsListTable extends \WP_List_Table {
 	 */
 	protected function column_status( $item ) {
 		$status = (string) $item['status'];
-		return '<span class="' . esc_attr( BackupRowPresenter::status_class( $status ) ) . '">' . esc_html( BackupRowPresenter::status_label( $status ) ) . '</span>';
+		$html   = '<span class="' . esc_attr( BackupRowPresenter::status_class( $status ) ) . '">' . esc_html( BackupRowPresenter::status_label( $status ) ) . '</span>';
+
+		$line = BackupRowPresenter::destinations_line( $this->destination_summary( (int) $item['id'] ) );
+		if ( '' !== $line ) {
+			$html .= '<br><span class="description ovb-destinations">' . esc_html( $line ) . '</span>';
+		}
+		return $html;
+	}
+
+	/**
+	 * Upload summary of a backup (remote destinations only).
+	 *
+	 * @param int $backup_id Backup id.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function destination_summary( $backup_id ) {
+		$rows = $this->files->for_backup( $backup_id );
+		if ( array() === $rows ) {
+			return array();
+		}
+		if ( null === $this->labels ) {
+			$this->labels = array();
+			foreach ( ( new DestinationsRepository() )->all() as $destination ) {
+				$this->labels[ $destination['id'] ] = $destination['label'];
+			}
+		}
+		return UploadSummary::summarise( $rows, $this->labels );
 	}
 
 	/**

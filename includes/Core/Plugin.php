@@ -18,6 +18,7 @@ namespace OpenVault\Backup\Core;
 use OpenVault\Backup\Admin\Assets;
 use OpenVault\Backup\Admin\Menu;
 use OpenVault\Backup\Engine\JobRunner;
+use OpenVault\Backup\Rest\DestinationsRestController;
 use OpenVault\Backup\Rest\RestController;
 use OpenVault\Backup\Security\DownloadController;
 
@@ -75,6 +76,7 @@ final class Plugin {
 
 		// REST requests are not admin requests, so the routes are hooked everywhere. Every route checks capability + nonce.
 		( new RestController() )->register_hooks();
+		( new DestinationsRestController() )->register_hooks();
 
 		if ( is_admin() ) {
 			$menu = new Menu();

@@ -25,7 +25,7 @@ const items: Item[] = [
 ];
 
 const faqs = [
-  { q: 'Can I restore a WordPress site with OpenVault today?', a: 'No. OpenVault Backup is pre-alpha: it can make local backups and let you download them, but it cannot restore yet. Keep using your current backup solution, and do not delete existing backups because of this plugin.' },
+  { q: 'Can I restore a WordPress site with OpenVault today?', a: 'No. OpenVault Backup is pre-alpha: it can back up to your server and to S3-compatible storage or a folder and let you download them, but it cannot restore yet. Keep using your current backup solution, and do not delete existing backups because of this plugin.' },
   { q: 'What happens to the plugin itself when a restore replaces my database?', a: 'By design, the plugin exports its own tables, settings and destination credentials before a database import and re-applies them afterwards, and it never overwrites its own folder. This is a design, not a shipped feature.' },
   { q: 'Can OpenVault move my site to a new domain?', a: 'Not yet. Migration with serialized-safe search and replace is planned for Phase 3, and nothing in the plugin does it today.' },
 ];

@@ -277,13 +277,29 @@ e_lock_delete() {
 }
 
 e_cancel() {
-	local tag=$1 fmt=$2 resp id uuid code
+	local tag=$1 fmt=$2 resp id uuid code hold=/var/www/html/wp-content/mu-plugins/ovb-e2e-zhold.php
+	mkdir -p /var/www/html/wp-content/mu-plugins
+	cat >"$hold" <<'PHP'
+<?php
+if ( ! defined( 'DISABLE_WP_CRON' ) ) { define( 'DISABLE_WP_CRON', true ); }
+add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
+	return ( false !== strpos( $url, 'wp-cron.php' ) || false !== strpos( $url, 'as_async_request_queue_runner' ) ) ? new WP_Error( 'ovb_e2e_blocked', 'blocked' ) : $pre;
+}, 10, 3 );
+add_filter( 'action_scheduler_allow_async_request_runner', '__return_false' );
+add_filter( 'ovb_kick_after_seconds', function () { return 3600; }, 99 );
+PHP
+	chown www-data:www-data "$hold"
 	resp=$(api POST /backups "{\"contents\":{\"db\":true,\"uploads\":true,\"plugins\":true,\"themes\":true,\"other_content\":true,\"mu_plugins\":true,\"core\":true},\"format\":\"$fmt\"}")
 	id=$(jg id <<<"$resp")
-	if ! [[ "$id" =~ ^[0-9]+$ ]]; then e_bad "$tag second backup could be started for the cancel test" "$resp"; return; fi
+	if ! [[ "$id" =~ ^[0-9]+$ ]]; then e_bad "$tag second backup could be started for the cancel test" "$resp"; rm -f "$hold"; return; fi
 	uuid=$(e_php 'echo ( new OpenVault\Backup\Database\BackupsRepository() )->find( '"$id"' )["uuid"];')
-	api GET "/backups/$id/progress" >/dev/null
+	# Deterministic: the job is held queued (no cron, no loopback, no browser kick) and gets a work folder with
+	# content, so cancel always meets an unfinished job and has something to clean.
+	e_php '$d = OpenVault\Backup\Support\Paths::work_dir( "'"$uuid"'" ); wp_mkdir_p( $d ); file_put_contents( $d . "/db.sql", "x" );' >/dev/null
+	chown -R www-data:www-data "$LOCAL_DIR/tmp/$uuid" 2>/dev/null
+	e_check "$tag the job is still unfinished and has a work folder before cancel" "$([ "$(jg finished <<<"$(api GET "/backups/$id/progress")")" = false ] && [ -d "$LOCAL_DIR/tmp/$uuid" ] && echo 1 || echo 0)"
 	resp=$(api POST "/backups/$id/cancel")
+	e_check "$tag cancel returns the backup (HTTP 200 payload with an id)" "$([ "$(jg id <<<"$resp")" = "$id" ] && echo 1 || echo 0)" "$resp"
 	e_check "$tag cancel ends the backup as failed (got $(jg status <<<"$resp"))" "$([ "$(jg status <<<"$resp")" = failed ] && echo 1 || echo 0)" "$resp"
 	e_check "$tag cancel message is 'Cancelled by user'" "$([ "$(jg error <<<"$resp")" = "Cancelled by user" ] && echo 1 || echo 0)" "$(jg error <<<"$resp")"
 	e_check "$tag the cancelled backup's work folder is cleaned" "$([ ! -e "$LOCAL_DIR/tmp/$uuid" ] && echo 1 || echo 0)"
@@ -294,6 +310,275 @@ e_cancel() {
 	e_check "$tag a cancelled backup stays failed" "$([ "$(jg status <<<"$resp")" = failed ] && echo 1 || echo 0)"
 	code=$(api_code DELETE "/backups/$id")
 	e_check "$tag a cancelled backup can be deleted (got $code)" "$([ "$code" = 200 ] && echo 1 || echo 0)"
+	rm -f "$hold"
+}
+
+# A backup started over REST with a Local destination selected: the progress payload reports the destination, History shows it
+# (as text), the remote folder holds byte-identical files, and bad destination ids are refused.
+e_destination() {
+	local fmt=$1 tag="[$1/destination]" dest_dir=/var/www/html/wp-content/ovb-e2e-dest dest_id resp id code html folder f same=1 n=0 contents
+	contents='{"db":true,"plugins":false,"themes":false,"uploads":false,"mu_plugins":false,"other_content":false,"core":false,"wp_config":false}'
+	LOCAL_DIR=/var/www/html/wp-content/$(wps option get ovb_local_dir)
+	dest_id=$(e_php 'echo ( new OpenVault\Backup\Database\DestinationsRepository() )->create( "local", "E2E folder", array( "path" => "'"$dest_dir"'" ), array() );')
+	e_check "$tag a Local destination row was created (id=$dest_id)" "$([[ "$dest_id" =~ ^[1-9][0-9]*$ ]] && echo 1 || echo 0)"
+	[[ "$dest_id" =~ ^[1-9][0-9]*$ ]] || return
+
+	code=$(api_code POST /backups "{\"format\":\"$fmt\",\"destinations\":[2147000000]}")
+	e_check "$tag a destination id that does not exist is refused (got $code)" "$([ "$code" = 400 ] && echo 1 || echo 0)"
+	code=$(api_code POST /backups "{\"format\":\"$fmt\",\"destinations\":\"all\"}")
+	e_check "$tag destinations must be a list (got $code)" "$([ "$code" = 400 ] && echo 1 || echo 0)"
+	code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "{\"destinations\":[$dest_id]}" "$RB/backups")
+	e_check "$tag anonymous start with a destination is rejected (got $code)" "$([ "$code" = 401 ] || [ "$code" = 403 ] && echo 1 || echo 0)"
+
+	touch /tmp/ovb-nudge; ( while [ -f /tmp/ovb-nudge ]; do curl -s -o /dev/null "$URL/wp-cron.php?doing_wp_cron"; sleep 2; done ) &
+	resp=$(api POST /backups "{\"contents\":$contents,\"format\":\"$fmt\",\"destinations\":[$dest_id],\"note\":\"e2e destination\"}")
+	id=$(jg id <<<"$resp")
+	e_check "$tag POST /backups with destinations starts a backup (id=$id)" "$([[ "$id" =~ ^[0-9]+$ ]] && echo 1 || echo 0)" "$resp"
+	if ! [[ "$id" =~ ^[0-9]+$ ]]; then rm -f /tmp/ovb-nudge; return; fi
+	e_poll "$id" 240
+	rm -f /tmp/ovb-nudge
+	e_check "$tag backup with a destination finished and is complete (statuses:$E_STATUSES)" "$([ "$(jg status <<<"$E_LAST")" = complete ] && echo 1 || echo 0)" "$(jg error <<<"$E_LAST")"
+	e_check "$tag the progress payload reports the destination as done with all files" "$(php -r '$d=json_decode($argv[1],true); $x=$d["destinations"]; echo ( count($x)===1 && $x[0]["id"]==(int)$argv[2] && $x[0]["status"]==="done" && $x[0]["label"]==="E2E folder" && $x[0]["files_done"]===$x[0]["files_total"] && $x[0]["files_total"]>=2 ) ? 1 : 0;' -- "$E_LAST" "$dest_id")" "$E_LAST"
+	e_check "$tag the progress payload shows no server path" "$(grep -q '/var/www\|ovb-e2e-dest' <<<"$E_LAST" && echo 0 || echo 1)"
+
+	folder=$(e_php '$r = ( new OpenVault\Backup\Database\BackupsRepository() )->find( '"$id"' ); echo OpenVault\Backup\Support\Paths::build_backup_folder_name( $r["created_at"], $r["uuid"] );')
+	e_check "$tag the remote folder has a manifest.json" "$([ -f "$dest_dir"/OpenVault-Backups/*/"$folder"/manifest.json ] && echo 1 || echo 0)"
+	for f in "$LOCAL_DIR/backups/$folder"/*.zip "$LOCAL_DIR/backups/$folder"/*.tar.gz "$LOCAL_DIR/backups/$folder"/manifest.json; do
+		[ -f "$f" ] || continue
+		n=$((n + 1))
+		cmp -s "$f" "$dest_dir"/OpenVault-Backups/*/"$folder"/"$(basename "$f")" || same=0
+	done
+	e_check "$tag $n remote files are byte identical to the local ones" "$([ "$same" = 1 ] && [ "$n" -ge 2 ] && echo 1 || echo 0)"
+	e_check "$tag the remote folder is guarded and has no .part leftovers" "$([ -f "$dest_dir/.htaccess" ] && [ -z "$(find "$dest_dir" -name '*.part')" ] && echo 1 || echo 0)"
+
+	html=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-backups")
+	e_check "$tag History shows the destination status as text" "$(grep -q 'E2E folder: Uploaded' <<<"$html" && echo 1 || echo 0)"
+	e_check "$tag History does not show the destination folder path" "$(grep -q 'ovb-e2e-dest' <<<"$html" && echo 0 || echo 1)"
+
+	code=$(api_code DELETE "/backups/$id")
+	e_check "$tag the backup can be deleted (got $code); the remote copy is not touched yet (retention comes later)" "$([ "$code" = 200 ] && [ -f "$dest_dir"/OpenVault-Backups/*/"$folder"/manifest.json ] && echo 1 || echo 0)"
+	e_php '( new OpenVault\Backup\Database\DestinationsRepository() )->delete( '"$dest_id"' );' >/dev/null
+	rm -rf "$dest_dir"
+}
+
+# Destinations over real HTTP (step 4c): REST CRUD with the REST nonce against the real S3 server of the matrix, a real backup to
+# the created destination, the Destinations and Back up now pages, and proof that the secrets never appear anywhere.
+e_destinations() {
+	local fmt=$1 tag="[$1/destinations-rest]" E_RESP=/tmp/ovb-e2e-responses.txt
+	local ep=${OVB_S3_ENDPOINT:-} acc=${OVB_S3_ACCESS:-} sec=${OVB_S3_SECRET:-} wrong="E2eWrongSecret$RANDOM$RANDOM" bucket="ovb-e2e-$(date +%s)"
+	local page nb hist code resp id id2 id3 bid folder f n same sjson creds_ok creds_bad before_count remote body hold=/var/www/html/wp-content/mu-plugins/ovb-e2e-zhold.php
+	local rdir=/var/www/html/wp-content/ovb-e2e-rest-local lines
+	: >"$E_RESP"
+
+	dapi() { local out; out=$(api "$@"); printf '%s\n' "$out" >>"$E_RESP"; printf '%s' "$out"; }
+	dcode() {
+		local method=$1 route=$2 payload=${3:-} status
+		status=$(curl -s -o /tmp/ovb-e2e-last.json -w '%{http_code}' -b "$JAR" -X "$method" -H "X-WP-Nonce: $NONCE" ${payload:+-H "Content-Type: application/json" --data "$payload"} "$RB$route")
+		cat /tmp/ovb-e2e-last.json >>"$E_RESP"; echo >>"$E_RESP"
+		printf '%s' "$status"
+	}
+	dcount() { e_php 'global $wpdb; echo (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}ovb_destinations" );'; }
+	denvelope() { e_php 'global $wpdb; $raw = (string) $wpdb->get_var( $wpdb->prepare( "SELECT credentials FROM {$wpdb->prefix}ovb_destinations WHERE id = %d", '"$1"' ) ); echo ( 0 === strpos( $raw, "ovb1:" ) && false === strpos( $raw, getenv( "OVB_S3_SECRET" ) ) && false === strpos( $raw, getenv( "OVB_S3_ACCESS" ) ) && false === strpos( $raw, "'"$wrong"'" ) ) ? 1 : 0;'; }
+	has() { grep -q -- "$1" <<<"$2"; }
+	# Settings of the test destination with one key changed: sjson_with <key> <json value>.
+	sjson_with() { php -r '$d = json_decode( $argv[1], true ); $d[ $argv[2] ] = json_decode( $argv[3], true ); echo json_encode( $d );' -- "$sjson" "$1" "$2"; }
+
+	e_check "$tag the matrix S3 server is configured (OVB_S3_ENDPOINT/ACCESS/SECRET)" "$([ -n "$ep" ] && [ -n "$acc" ] && [ -n "$sec" ] && echo 1 || echo 0)"
+	[ -n "$ep" ] && [ -n "$acc" ] && [ -n "$sec" ] || return
+	creds_ok="{\"access_key\":\"$acc\",\"secret_key\":\"$sec\"}"
+	creds_bad="{\"access_key\":\"$acc\",\"secret_key\":\"$wrong\"}"
+	sjson="{\"preset\":\"custom\",\"endpoint\":\"$ep\",\"addressing\":\"path\",\"allow_insecure_http\":true,\"allow_private_endpoint\":true,\"bucket\":\"$bucket\",\"prefix\":\"e2e-prefix\"}"
+	LOCAL_DIR=/var/www/html/wp-content/$(wps option get ovb_local_dir)
+	e_check "$tag the harness created a bucket on the S3 server" "$([ "$(wpc eval-file /src/tests/matrix/e2e-s3.php bucket-create "$bucket" 2>/dev/null | tail -1)" = 200 ] && echo 1 || echo 0)"
+
+	# 1. The pages before any destination exists.
+	page=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-destinations"); printf '%s\n' "$page" >>"$E_RESP"
+	NONCE=$(php -r 'if ( preg_match( "/ovbDestinations = (\{.*?\});/s", stream_get_contents( STDIN ), $m ) ) { $d = json_decode( $m[1], true ); echo isset( $d["nonce"] ) ? $d["nonce"] : ""; }' <<<"$page")
+	e_check "$tag Destinations page carries a REST nonce and loads destinations.js" "$([ -n "$NONCE" ] && has 'destinations.js' "$page" && echo 1 || echo 0)"
+	e_check "$tag Destinations page does not load the other page scripts" "$(has 'backup-now.js\|history.js' "$page" && echo 0 || echo 1)"
+	n=1; for f in aws r2 b2 wasabi spaces custom; do has "<option value=\"$f\"" "$page" || n=0; done
+	e_check "$tag the S3 form offers all six provider presets" "$n"
+	e_check "$tag inline help links to the provider documentation" "$(has 'docs.aws.amazon.com' "$page" && has 'developers.cloudflare.com' "$page" && has 'Provider documentation' "$page" && has 'rel="noopener noreferrer"' "$page" && echo 1 || echo 0)"
+	e_check "$tag the page says archives are not encrypted yet and explains the private-network risk" "$(has 'not encrypted yet' "$page" && has 'reach internal systems' "$page" && echo 1 || echo 0)"
+	e_check "$tag the secret key field is a password field, autocomplete off, never pre-filled" "$(has 'type="password"[^>]*autocomplete="off"[^>]*value=""' "$page" && echo 1 || echo 0)"
+	e_check "$tag the page shows the empty state, no Google Drive option and a JavaScript notice" "$(has 'No destinations yet' "$page" && ! grep -qi 'google' <<<"$page" && has 'JavaScript is required' "$page" && echo 1 || echo 0)"
+	nb=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-backup-now"); printf '%s\n' "$nb" >>"$E_RESP"
+	e_check "$tag Back up now says a local copy always stays and hints at the Destinations page when none is set up" "$(has 'always stays in the local backup folder' "$nb" && has 'No other destination is set up' "$nb" && has 'page=openvault-destinations' "$nb" && echo 1 || echo 0)"
+
+	# 2. Nonce and capability.
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$RB/destinations")
+	e_check "$tag anonymous GET /destinations is rejected (got $code)" "$([ "$code" = 401 ] || [ "$code" = 403 ] && echo 1 || echo 0)"
+	code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" "$RB/destinations")
+	e_check "$tag GET /destinations without a nonce is rejected (got $code)" "$([ "$code" = 401 ] || [ "$code" = 403 ] && echo 1 || echo 0)"
+	code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST -H 'Content-Type: application/json' --data "{\"type\":\"s3\",\"label\":\"x\",\"settings\":$sjson,\"credentials\":$creds_ok}" "$RB/destinations")
+	e_check "$tag POST /destinations without a nonce is rejected (got $code)" "$([ "$code" = 401 ] || [ "$code" = 403 ] && echo 1 || echo 0)"
+	code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X POST -H 'X-WP-Nonce: 0123456789' -H 'Content-Type: application/json' --data "{\"type\":\"s3\",\"label\":\"x\",\"settings\":$sjson,\"credentials\":$creds_ok}" "$RB/destinations")
+	e_check "$tag POST /destinations with a bad nonce is 403 (got $code)" "$([ "$code" = 403 ] && echo 1 || echo 0)"
+	code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data "{\"type\":\"s3\",\"label\":\"x\",\"settings\":$sjson,\"credentials\":$creds_ok}" "$RB/destinations")
+	e_check "$tag anonymous POST /destinations is rejected (got $code)" "$([ "$code" = 401 ] || [ "$code" = 403 ] && echo 1 || echo 0)"
+	code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" -X DELETE "$RB/destinations/1")
+	e_check "$tag DELETE /destinations/1 without a nonce is rejected (got $code)" "$([ "$code" = 401 ] || [ "$code" = 403 ] && echo 1 || echo 0)"
+	e_check "$tag the rejected requests stored nothing" "$([ "$(dcount)" = 0 ] && echo 1 || echo 0)"
+
+	# 3. Hostile payloads: all 400 and nothing stored.
+	before_count=$(dcount)
+	n=1; lines=""
+	for body in \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$(sjson_with evil 1),\"credentials\":$creds_ok}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$(sjson_with bucket '"B'"'"'; DROP TABLE wp_options;--"'),\"credentials\":$creds_ok}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$(sjson_with prefix '"../../etc"'),\"credentials\":$creds_ok}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$(sjson_with prefix '"/abs"'),\"credentials\":$creds_ok}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$(sjson_with endpoint '"http://169.254.169.254/"'),\"credentials\":$creds_ok}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$(sjson_with endpoint '"http://2130706433/"'),\"credentials\":$creds_ok}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$sjson}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":$sjson,\"credentials\":{\"access_key\":\"$acc\",\"secret_key\":\"$wrong\",\"role\":\"admin\"}}" \
+		"{\"type\":\"s3\",\"label\":\"\",\"settings\":$sjson,\"credentials\":$creds_bad}" \
+		"{\"type\":\"s3\",\"label\":\"$(printf 'x%.0s' $(seq 1 101))\",\"settings\":$sjson,\"credentials\":$creds_bad}" \
+		"{\"type\":\"gdrive\",\"label\":\"x\",\"settings\":{}}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":\"text\",\"credentials\":$creds_bad}" \
+		"{\"type\":\"s3\",\"label\":\"x\",\"settings\":[1,2],\"credentials\":$creds_bad}" \
+		"{\"label\":\"x\",\"settings\":$sjson,\"credentials\":$creds_bad}" \
+		"{\"type\":\"local\",\"label\":\"x\",\"settings\":{\"path\":\"/etc\"}}" \
+		"{\"type\":\"local\",\"label\":\"x\",\"settings\":{\"path\":\"/var/www/html/wp-content/../../etc\"}}" \
+		"{\"type\":\"local\",\"label\":\"x\",\"settings\":{\"path\":\"/var/www/html/wp-admin\"}}" \
+		"{\"type\":\"local\",\"label\":\"x\",\"settings\":{\"path\":\"/var/www/html\"}}" \
+		"{\"type\":\"local\",\"label\":\"x\",\"settings\":{\"path\":\"../relative\"}}" \
+		"{\"type\":\"local\",\"label\":\"x\",\"settings\":{\"path\":\"\"},\"credentials\":$creds_bad}"; do
+		code=$(dcode POST /destinations "$body")
+		lines="$lines $code"
+		[ "$code" = 400 ] || n=0
+	done
+	e_check "$tag 20 hostile create payloads (unknown keys, bad bucket, traversal and absolute prefix, SSRF endpoints, missing or extra credentials, bad label, unknown type, /etc, ../, wp-admin, the WordPress root) are all 400 (got$lines)" "$n"
+	e_check "$tag nothing was stored by the hostile payloads" "$([ "$(dcount)" = "$before_count" ] && echo 1 || echo 0)"
+
+	# 4. Create with a wrong secret, test, then replace the keys, test again.
+	resp=$(dapi POST /destinations "{\"type\":\"s3\",\"label\":\"E2E S3\",\"settings\":$sjson,\"credentials\":$creds_bad}")
+	id=$(jg id <<<"$resp")
+	e_check "$tag POST /destinations creates an s3 destination (id=$id) and the response has no credentials" "$([[ "$id" =~ ^[1-9][0-9]*$ ]] && ! has '"credentials"' "$resp" && ! has "$wrong" "$resp" && ! has "$acc" "$resp" && [ "$(jg has_credentials <<<"$resp")" = true ] && [ "$(jg status <<<"$resp")" = new ] && echo 1 || echo 0)" "$resp"
+	[[ "$id" =~ ^[1-9][0-9]*$ ]] || return
+	e_check "$tag the raw credentials column is an ovb1: envelope with neither key inside" "$(denvelope "$id")"
+	resp=$(dapi GET /destinations)
+	e_check "$tag GET /destinations shows the destination without credentials" "$([ "$(php -r '$d=json_decode($argv[1],true); echo ( is_array($d) && count($d)===1 && $d[0]["label"]==="E2E S3" && $d[0]["preset"]==="custom" && !array_key_exists("credentials",$d[0]) && strpos($argv[1],"ovb1:")===false ) ? 1 : 0;' -- "$resp")" = 1 ] && ! has "$wrong" "$resp" && ! has "$acc" "$resp" && echo 1 || echo 0)" "$resp"
+	resp=$(dapi POST "/destinations/$id/test")
+	e_check "$tag a wrong secret fails the test with a message that does not contain the secret (status $(jg destination status <<<"$resp"))" "$([ "$(jg ok <<<"$resp")" = false ] && [ -n "$(jg message <<<"$resp")" ] && [ "$(jg destination status <<<"$resp")" = error ] && ! has "$wrong" "$resp" && ! has "$sec" "$resp" && echo 1 || echo 0)" "$resp"
+	resp=$(dapi POST "/destinations/$id" "{\"credentials\":$creds_ok}")
+	e_check "$tag replacing the keys resets the status to new and returns no secret" "$([ "$(jg status <<<"$resp")" = new ] && ! has "$sec" "$resp" && [ "$(denvelope "$id")" = 1 ] && echo 1 || echo 0)" "$resp"
+	resp=$(dapi POST "/destinations/$id/test")
+	e_check "$tag the right secret passes the test and the status becomes connected" "$([ "$(jg ok <<<"$resp")" = true ] && [ "$(jg destination status <<<"$resp")" = connected ] && echo 1 || echo 0)" "$resp"
+	resp=$(dapi POST "/destinations/$id" '{"label":"E2E S3 renamed"}')
+	e_check "$tag updating only the label keeps the credentials" "$([ "$(jg label <<<"$resp")" = "E2E S3 renamed" ] && [ "$(jg has_credentials <<<"$resp")" = true ] && echo 1 || echo 0)" "$resp"
+	resp=$(dapi POST "/destinations/$id/test")
+	e_check "$tag the test still passes after the label-only update" "$([ "$(jg ok <<<"$resp")" = true ] && echo 1 || echo 0)" "$resp"
+	code=$(dcode POST "/destinations/$id" "{\"settings\":$(sjson_with endpoint '"http://169.254.169.254/"')}")
+	e_check "$tag updating the settings with the metadata address is 400 (got $code)" "$([ "$code" = 400 ] && echo 1 || echo 0)"
+	resp=$(dapi POST "/destinations/$id/test")
+	e_check "$tag the refused update changed nothing (test still ok)" "$([ "$(jg ok <<<"$resp")" = true ] && echo 1 || echo 0)" "$resp"
+	code=$(dcode POST /destinations/999999/test)
+	e_check "$tag testing an unknown destination is 404 (got $code)" "$([ "$code" = 404 ] && echo 1 || echo 0)"
+
+	# 5. The pages with a destination.
+	page=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-destinations"); printf '%s\n' "$page" >>"$E_RESP"
+	e_check "$tag the Destinations page lists the card with its status as text and the details line" "$(has 'E2E S3 renamed' "$page" && has 'Connected' "$page" && has "Bucket $bucket" "$page" && has 'Test connection' "$page" && echo 1 || echo 0)"
+	nb=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-backup-now"); printf '%s\n' "$nb" >>"$E_RESP"
+	e_check "$tag Back up now lists the destination as an enabled checkbox with its status" "$(has "data-ovb-destination=\"$id\"" "$nb" && ! has "data-ovb-destination=\"$id\"[^>]*disabled" "$nb" && has 'E2E S3 renamed' "$nb" && echo 1 || echo 0)"
+
+	# 6. A real backup to it. The job is held queued first, so deleting the destination meets a backup that uses it.
+	mkdir -p /var/www/html/wp-content/mu-plugins
+	cat >"$hold" <<'PHP'
+<?php
+if ( ! defined( 'DISABLE_WP_CRON' ) ) { define( 'DISABLE_WP_CRON', true ); }
+add_filter( 'pre_http_request', function ( $pre, $args, $url ) {
+	return ( false !== strpos( $url, 'wp-cron.php' ) || false !== strpos( $url, 'as_async_request_queue_runner' ) ) ? new WP_Error( 'ovb_e2e_blocked', 'blocked' ) : $pre;
+}, 10, 3 );
+add_filter( 'action_scheduler_allow_async_request_runner', '__return_false' );
+add_filter( 'ovb_kick_after_seconds', function () { return 3600; }, 99 );
+PHP
+	chown www-data:www-data "$hold"
+	resp=$(dapi POST /backups "{\"contents\":{\"db\":true,\"plugins\":false,\"themes\":false,\"uploads\":false,\"mu_plugins\":false,\"other_content\":false,\"core\":false,\"wp_config\":false},\"format\":\"$fmt\",\"destinations\":[$id],\"note\":\"e2e destinations rest\"}")
+	bid=$(jg id <<<"$resp")
+	e_check "$tag a backup with the destination selected is started (id=$bid)" "$([[ "$bid" =~ ^[1-9][0-9]*$ ]] && echo 1 || echo 0)" "$resp"
+	if ! [[ "$bid" =~ ^[1-9][0-9]*$ ]]; then rm -f "$hold"; return; fi
+	code=$(dcode DELETE "/destinations/$id")
+	e_check "$tag deleting the destination while a backup that uses it is queued or running is 409 (got $code)" "$([ "$code" = 409 ] && [ "$(dcount)" = 1 ] && echo 1 || echo 0)"
+	rm -f "$hold"
+	touch /tmp/ovb-nudge; ( while [ -f /tmp/ovb-nudge ]; do curl -s -o /dev/null "$URL/wp-cron.php?doing_wp_cron"; sleep 2; done ) &
+	e_poll "$bid" 240
+	rm -f /tmp/ovb-nudge
+	printf '%s\n' "$E_LAST" >>"$E_RESP"
+	e_check "$tag the backup finished complete (statuses:$E_STATUSES)" "$([ "$(jg status <<<"$E_LAST")" = complete ] && echo 1 || echo 0)" "$(jg error <<<"$E_LAST")"
+	e_check "$tag the progress payload reports the destination by label as done with all files" "$(php -r '$d=json_decode($argv[1],true); $x=$d["destinations"]; echo ( count($x)===1 && $x[0]["id"]==(int)$argv[2] && $x[0]["status"]==="done" && $x[0]["label"]==="E2E S3 renamed" && $x[0]["files_done"]===$x[0]["files_total"] && $x[0]["files_total"]>=2 ) ? 1 : 0;' -- "$E_LAST" "$id")" "$E_LAST"
+	folder=$(e_php '$r = ( new OpenVault\Backup\Database\BackupsRepository() )->find( '"$bid"' ); echo OpenVault\Backup\Support\Paths::build_backup_folder_name( $r["created_at"], $r["uuid"] );')
+	remote=$(wpc eval-file /src/tests/matrix/e2e-s3.php list "$bucket" e2e-prefix/ 2>/dev/null)
+	e_check "$tag the objects exist remotely below the prefix, including manifest.json" "$(has "e2e-prefix/OpenVault-Backups/.*/$folder/manifest.json" "$remote" && echo 1 || echo 0)" "$remote"
+	same=1; n=0
+	for f in "$LOCAL_DIR/backups/$folder"/*.zip "$LOCAL_DIR/backups/$folder"/*.tar.gz "$LOCAL_DIR/backups/$folder"/manifest.json; do
+		[ -f "$f" ] || continue
+		n=$((n + 1))
+		has "^$(stat -c %s "$f") e2e-prefix/OpenVault-Backups/.*/$folder/$(basename "$f")\$" "$remote" || same=0
+	done
+	e_check "$tag $n remote objects have exactly the size of the local files" "$([ "$same" = 1 ] && [ "$n" -ge 2 ] && echo 1 || echo 0)" "$remote"
+	hist=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-backups"); printf '%s\n' "$hist" >>"$E_RESP"
+	e_check "$tag History shows the destination LABEL and its status as text" "$(has 'E2E S3 renamed: Uploaded' "$hist" && echo 1 || echo 0)"
+
+	# 7. needs_reconnect: unreadable credentials give a clear answer, the pages offer the fix, new keys repair it.
+	resp=$(dapi POST /destinations "{\"type\":\"s3\",\"label\":\"E2E reconnect\",\"settings\":$sjson,\"credentials\":$creds_ok}")
+	id2=$(jg id <<<"$resp")
+	e_php 'global $wpdb; $wpdb->update( $wpdb->prefix . "ovb_destinations", array( "credentials" => "ovb1:garbage-envelope" ), array( "id" => '"${id2:-0}"' ) );' >/dev/null
+	resp=$(dapi POST "/destinations/$id2/test")
+	e_check "$tag unreadable credentials: ok=false, needs_reconnect and an actionable message" "$([ "$(jg ok <<<"$resp")" = false ] && [ "$(jg destination status <<<"$resp")" = needs_reconnect ] && has 'Enter the keys again' "$resp" && echo 1 || echo 0)" "$resp"
+	page=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-destinations"); printf '%s\n' "$page" >>"$E_RESP"
+	nb=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-backup-now"); printf '%s\n' "$nb" >>"$E_RESP"
+	e_check "$tag the card says the saved credentials can no longer be read and offers 'Enter keys again'" "$(has 'can no longer be read' "$page" && has 'Enter keys again' "$page" && has 'Needs reconnect' "$page" && echo 1 || echo 0)"
+	e_check "$tag Back up now disables a needs_reconnect destination and says why" "$(has "data-ovb-destination=\"$id2\"[^>]*disabled" "$nb" && has 'Enter the keys again on the Destinations page' "$nb" && echo 1 || echo 0)"
+	code=$(dcode POST /backups "{\"format\":\"$fmt\",\"destinations\":[$id2]}")
+	e_check "$tag starting a backup with a needs_reconnect destination is refused 400 (got $code)" "$([ "$code" = 400 ] && echo 1 || echo 0)"
+	resp=$(dapi POST "/destinations/$id2" "{\"credentials\":$creds_ok}")
+	e_check "$tag entering the keys again repairs it (status new)" "$([ "$(jg status <<<"$resp")" = new ] && [ "$(denvelope "$id2")" = 1 ] && echo 1 || echo 0)" "$resp"
+	resp=$(dapi POST "/destinations/$id2/test")
+	e_check "$tag and the repaired destination connects" "$([ "$(jg ok <<<"$resp")" = true ] && echo 1 || echo 0)" "$resp"
+	code=$(dcode DELETE "/destinations/$id2")
+	e_check "$tag the second destination is removed (got $code)" "$([ "$code" = 200 ] && echo 1 || echo 0)"
+
+	# 8. Local destination over REST.
+	resp=$(dapi POST /destinations "{\"type\":\"local\",\"label\":\"E2E local\",\"settings\":{\"path\":\"$rdir\"}}")
+	id3=$(jg id <<<"$resp")
+	e_check "$tag a local destination with a custom folder is created (id=$id3)" "$([[ "$id3" =~ ^[1-9][0-9]*$ ]] && [ "$(jg has_credentials <<<"$resp")" = false ] && echo 1 || echo 0)" "$resp"
+	if [[ "$id3" =~ ^[1-9][0-9]*$ ]]; then
+		resp=$(dapi POST "/destinations/$id3/test")
+		e_check "$tag the local folder test passes" "$([ "$(jg ok <<<"$resp")" = true ] && [ -d "$rdir" ] && echo 1 || echo 0)" "$resp"
+		code=$(dcode POST "/destinations/$id3" '{"settings":{"path":"/var/www/html/wp-includes"}}')
+		e_check "$tag changing a local folder to wp-includes is 400 (got $code)" "$([ "$code" = 400 ] && echo 1 || echo 0)"
+		code=$(dcode POST "/destinations/$id3" "{\"credentials\":$creds_ok}")
+		e_check "$tag a local destination does not accept credentials (got $code)" "$([ "$code" = 400 ] && echo 1 || echo 0)"
+		code=$(dcode DELETE "/destinations/$id3")
+		e_check "$tag the local destination is removed (got $code)" "$([ "$code" = 200 ] && echo 1 || echo 0)"
+	fi
+	rm -rf "$rdir"
+
+	# 9. Delete after the backup is complete: the row is gone, the remote objects stay.
+	code=$(dcode DELETE "/destinations/$id")
+	e_check "$tag DELETE after the backup completed is 200 (got $code)" "$([ "$code" = 200 ] && echo 1 || echo 0)"
+	e_check "$tag the destination row (and with it the credentials) is gone" "$([ "$(dcount)" = 0 ] && echo 1 || echo 0)"
+	resp=$(dapi GET /destinations)
+	e_check "$tag GET /destinations is empty again" "$([ "$resp" = "[]" ] && echo 1 || echo 0)" "$resp"
+	code=$(dcode DELETE "/destinations/$id")
+	e_check "$tag deleting it again is 404 (got $code)" "$([ "$code" = 404 ] && echo 1 || echo 0)"
+	remote=$(wpc eval-file /src/tests/matrix/e2e-s3.php list "$bucket" e2e-prefix/ 2>/dev/null)
+	e_check "$tag removing a destination does not delete the remote objects" "$(has 'manifest.json' "$remote" && echo 1 || echo 0)"
+	hist=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-backups"); printf '%s\n' "$hist" >>"$E_RESP"
+	e_check "$tag History still lists the upload with a fallback name once the destination is gone" "$(has "Destination $id: Uploaded" "$hist" && echo 1 || echo 0)"
+	code=$(api_code DELETE "/backups/$bid")
+	e_check "$tag the backup can be deleted (got $code)" "$([ "$code" = 200 ] && echo 1 || echo 0)"
+
+	# 10. The secrets are nowhere: not in any response or page body, the PHP and Apache logs, or the plugin log table.
+	n=1; for f in "$sec" "$wrong"; do grep -qF -- "$f" "$E_RESP" && n=0; done
+	e_check "$tag neither secret appears in any REST response or page body seen in this test" "$n"
+	n=1; for f in "$sec" "$wrong"; do grep -qF -- "$f" /var/www/html/wp-content/debug.log /tmp/apache.log 2>/dev/null && n=0; done
+	e_check "$tag neither secret appears in debug.log or the Apache log" "$n"
+	e_check "$tag neither secret appears in the plugin log table" "$([ "$(e_php 'global $wpdb; echo (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->prefix}ovb_logs WHERE message LIKE %s OR context LIKE %s OR message LIKE %s OR context LIKE %s", "%" . getenv( "OVB_S3_SECRET" ) . "%", "%" . getenv( "OVB_S3_SECRET" ) . "%", "%'"$wrong"'%", "%'"$wrong"'%" ) );')" = 0 ] && echo 1 || echo 0)"
+
+	wpc eval-file /src/tests/matrix/e2e-s3.php bucket-delete "$bucket" >/dev/null 2>&1
+	rm -f "$E_RESP" /tmp/ovb-e2e-last.json
 }
 
 step "REST, download and pages over HTTP (admin session)"
@@ -304,4 +589,11 @@ for fmt in zip tar.gz; do
 	fi
 	e_flow "$fmt" as
 	e_flow "$fmt" kick
+done
+for fmt in zip tar.gz; do
+	if [ "$(e_php 'echo ( new OpenVault\Backup\Archive\CapabilityDetector() )->is_available( "'"$fmt"'" ) ? "1" : "0";')" = 1 ]; then
+		e_destination "$fmt"
+		e_destinations "$fmt"
+		break
+	fi
 done

@@ -10,6 +10,7 @@ openvault-backup/
 |   |   |   `-- admin.css
 |   |   |-- js
 |   |   |   |-- backup-now.js
+|   |   |   |-- destinations.js
 |   |   |   `-- history.js
 |   |   `-- src
 |   |-- images
@@ -91,13 +92,22 @@ openvault-backup/
 |   |   |-- OneDrive
 |   |   |   `-- OneDriveDestination.php
 |   |   |-- S3
+|   |   |   |-- EndpointValidator.php
 |   |   |   |-- MultipartUploader.php
+|   |   |   |-- S3Client.php
 |   |   |   |-- S3Destination.php
+|   |   |   |-- S3Presets.php
 |   |   |   `-- SigV4Signer.php
 |   |   |-- Sftp
 |   |   |   `-- SftpDestination.php
+|   |   |-- DestinationException.php
 |   |   |-- DestinationInterface.php
-|   |   `-- DestinationRegistry.php
+|   |   |-- DestinationPresenter.php
+|   |   |-- DestinationRegistry.php
+|   |   |-- DestinationSettings.php
+|   |   |-- RemotePath.php
+|   |   |-- TestResult.php
+|   |   `-- UploadProgress.php
 |   |-- Engine
 |   |   |-- Dump
 |   |   |   |-- BatchSizer.php
@@ -123,6 +133,7 @@ openvault-backup/
 |   |   |   |-- PreflightStep.php
 |   |   |   |-- RetentionStep.php
 |   |   |   |-- StepInterface.php
+|   |   |   |-- UploadPlan.php
 |   |   |   `-- UploadStep.php
 |   |   |-- Budget.php
 |   |   |-- JobContext.php
@@ -132,12 +143,14 @@ openvault-backup/
 |   |   |-- LockStore.php
 |   |   |-- OptionsLockStore.php
 |   |   |-- Progress.php
-|   |   `-- StepResult.php
+|   |   |-- StepResult.php
+|   |   `-- UploadSummary.php
 |   |-- Notifications
 |   |   `-- Notifier.php
 |   |-- Backups
 |   |   `-- BackupFiles.php
 |   |-- Rest
+|   |   |-- DestinationsRestController.php
 |   |   `-- RestController.php
 |   |-- Restore
 |   |   |-- DatabaseImporter.php

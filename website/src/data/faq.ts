@@ -19,7 +19,7 @@ export const faqs: Faq[] = [
   },
   {
     tag: 's3', q: 'What does S3-compatible mean?',
-    a: 'Many storage services copy the Amazon S3 request format, so one client can talk to all of them. OpenVault Backup is designed to use a single request signer for AWS S3, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces and any custom endpoint.',
+    a: 'Many storage services copy the Amazon S3 request format, so one client can talk to all of them. OpenVault Backup uses a single request signer for AWS S3, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces and any custom endpoint.',
   },
   {
     tag: 's3', q: 'Do I need an AWS account to use S3-compatible storage?',
@@ -27,11 +27,11 @@ export const faqs: Faq[] = [
   },
   {
     tag: 's3', q: 'Does the plugin use the AWS SDK?',
-    a: 'No. It is designed to sign requests itself with Signature Version 4 and send them through the WordPress HTTP API. It also uploads a manifest.json with each backup, and large archives use multipart uploads.',
+    a: 'No. It signs requests itself with Signature Version 4 and sends them through the WordPress HTTP API. It also uploads a manifest.json with each backup, and large archives use multipart uploads that resume after an interruption.',
   },
   {
     q: 'Which archive formats will it support?',
-    a: 'The first release is planned to offer ZIP (deflate, the default), ZIP (store, fastest, good for media) and TAR.GZ. TAR.BZ2 is planned for a later phase. The interface only offers formats your server actually supports, with a short explanation of each.',
+    a: 'The plugin offers ZIP (deflate, the default), ZIP (store, fastest, good for media) and TAR.GZ. TAR.BZ2 is planned for a later phase. The interface only offers formats your server actually supports.',
   },
   {
     q: 'Does it phone home?',
@@ -53,15 +53,15 @@ export const faqs: Faq[] = [
   },
   {
     q: 'Will it work on shared hosting?',
-    a: 'It is designed for it. Every long task is built to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory. The pre-alpha 0.1.0 is tested in Docker profiles, including low-memory and restricted ones, but it has not yet been proven on real shared hosts.',
+    a: 'It is designed for it. Every long task is built to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory. The pre-alpha 0.2.0 is tested in Docker profiles, including low-memory and restricted ones, but it has not yet been proven on real shared hosts.',
   },
   {
     q: 'What can the pre-alpha do today?',
-    a: 'Version 0.1.0 creates backups of your database and files (ZIP or TAR.GZ, split into parts), keeps them in a protected folder on your own server, and lets you download, lock or delete them. It cannot restore, run schedules or send backups to Google Drive or S3. Backups on the same server do not protect you if you lose the server.',
+    a: 'Version 0.2.0 creates backups of your database and files (ZIP or TAR.GZ, split into parts), keeps them in a protected folder on your own server, can also send a copy to S3-compatible storage or another folder, and lets you download, lock or delete them. It cannot restore, run schedules, delete old backups automatically, send backups to Google Drive or encrypt archives. S3 was verified live only against SeaweedFS. A backup that stays only on your server does not protect you if you lose the server.',
   },
   {
     q: 'When will restore and Google Drive work?',
-    a: 'Not yet, and there are no dates. Restore is the next half of the core loop, and Google Drive and S3 destinations are planned after it. The roadmap shows each milestone and where every feature stands.',
+    a: 'Not yet, and there are no dates. Restore is the next half of the core loop, and Google Drive is planned after it. S3-compatible storage already works in pre-alpha. The roadmap shows each milestone and where every feature stands.',
   },
 ];
 

@@ -14,7 +14,7 @@ interface Commitment { title: string; text: string; badges?: readonly (readonly 
 const commitments: Commitment[] = [
   {
     title: 'Your credentials, no relay servers',
-    text: 'You connect your own Google OAuth app or your own S3 keys. Tokens and data travel only between your site and your storage. There is no shared OAuth app and no server of ours in the middle. The OAuth state is validated and the redirect URI is fixed to your admin URL.',
+    text: 'You connect your own S3 keys today, and your own Google OAuth app once Google Drive is built. Tokens and data travel only between your site and your storage. There is no shared OAuth app and no server of ours in the middle. For Google Drive, the OAuth state is designed to be validated and the redirect URI fixed to your admin URL.',
     badges: [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3']],
   },
   {
@@ -24,7 +24,7 @@ const commitments: Commitment[] = [
   },
   {
     title: 'Credentials encrypted before storage',
-    text: 'Saved credentials are encrypted at rest, with a key derived from your WordPress salts or an OVB_ENCRYPTION_KEY constant you set in wp-config. Secrets are never shown again in the interface; you only see a masked value and a replace button.',
+    text: 'Saved credentials are encrypted at rest, with a key derived from your WordPress salts or an OVB_ENCRYPTION_KEY constant you set in wp-config. S3 secret keys are write-only: once saved they are never shown again in the interface or written to logs, and you can only replace them.',
   },
   {
     title: 'Downloads only through an authenticated controller',
@@ -41,7 +41,7 @@ const commitments: Commitment[] = [
   },
   {
     title: 'Secrets stay out of the logs',
-    text: 'Logs must never contain tokens or passwords. The logger already redacts secrets in the pre-alpha foundation, and it has unit tests.',
+    text: 'Logs must never contain tokens or passwords. The logger redacts secrets, it has unit tests, and the test matrix checks that S3 secrets appear in no response, page or log.',
   },
   {
     title: 'Archives are checked on the way in',
@@ -55,7 +55,8 @@ const commitments: Commitment[] = [
   },
   {
     title: 'Nothing leaves except where you point it',
-    text: 'The plugin only contacts the destinations you configure. It has no analytics and does not phone home.',
+    text: 'The plugin only contacts the destinations you configure. It has no analytics and does not phone home. S3 endpoints must use https, and link-local, metadata and other unsafe addresses are refused. Archives are not encrypted yet: they travel over HTTPS but are stored as they are, and archive encryption is planned.',
+    badges: [['S3-compatible', 'destination-s3'], ['Encryption', 'encryption']],
   },
 ];
 ---

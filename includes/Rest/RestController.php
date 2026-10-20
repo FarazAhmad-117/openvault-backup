@@ -30,11 +30,15 @@ use OpenVault\Backup\Backups\BackupFiles;
 use OpenVault\Backup\Core\Capabilities;
 use OpenVault\Backup\Database\BackupFilesRepository;
 use OpenVault\Backup\Database\BackupsRepository;
+use OpenVault\Backup\Database\DestinationsRepository;
+use OpenVault\Backup\Destinations\DestinationRegistry;
 use OpenVault\Backup\Engine\JobLock;
 use OpenVault\Backup\Engine\JobRunner;
 use OpenVault\Backup\Engine\JobState;
 use OpenVault\Backup\Engine\Progress;
 use OpenVault\Backup\Engine\Scan\ContentSelector;
+use OpenVault\Backup\Engine\Steps\UploadPlan;
+use OpenVault\Backup\Engine\UploadSummary;
 use OpenVault\Backup\Security\DownloadController;
 use OpenVault\Backup\Support\Logger;
 use OpenVault\Backup\Support\Paths;
@@ -109,23 +113,30 @@ class RestController {
 					'callback'            => array( $this, 'create_backup' ),
 					'permission_callback' => $permission,
 					'args'                => array(
-						'contents' => array(
+						'contents'     => array(
 							'type'              => 'object',
 							'required'          => false,
 							'validate_callback' => array( __CLASS__, 'validate_contents' ),
 							'sanitize_callback' => array( __CLASS__, 'sanitize_contents' ),
 						),
-						'format'   => array(
+						'format'       => array(
 							'type'              => 'string',
 							'required'          => false,
 							'validate_callback' => array( __CLASS__, 'validate_format_arg' ),
 							'sanitize_callback' => 'sanitize_text_field',
 						),
-						'note'     => array(
+						'note'         => array(
 							'type'              => 'string',
 							'required'          => false,
 							'validate_callback' => array( __CLASS__, 'validate_note' ),
 							'sanitize_callback' => 'sanitize_text_field',
+						),
+						'destinations' => array(
+							'type'              => 'array',
+							'required'          => false,
+							'items'             => array( 'type' => 'integer' ),
+							'validate_callback' => array( __CLASS__, 'validate_destinations' ),
+							'sanitize_callback' => array( __CLASS__, 'sanitize_destinations' ),
 						),
 					),
 				),
@@ -325,6 +336,45 @@ class RestController {
 	}
 
 	/**
+	 * The destinations argument: a list of at most UploadPlan::MAX_DESTINATIONS positive integers (ids are checked
+	 * against the database when the backup is started).
+	 *
+	 * @param mixed $value Value.
+	 * @return bool
+	 */
+	public static function validate_destinations( $value ) {
+		if ( ! is_array( $value ) || count( $value ) > UploadPlan::MAX_DESTINATIONS ) {
+			return false;
+		}
+		foreach ( $value as $id ) {
+			if ( ! is_int( $id ) && ! ( is_string( $id ) && 1 === preg_match( '/^[1-9][0-9]{0,9}\z/', $id ) ) ) {
+				return false;
+			}
+			if ( (int) $id < 1 || (int) $id > 2147483647 ) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	/**
+	 * Destination ids as unique integers, in the given order.
+	 *
+	 * @param mixed $value Value.
+	 * @return int[]
+	 */
+	public static function sanitize_destinations( $value ) {
+		$ids = array();
+		foreach ( is_array( $value ) ? $value : array() as $id ) {
+			$id = (int) $id;
+			if ( $id >= 1 && ! in_array( $id, $ids, true ) ) {
+				$ids[] = $id;
+			}
+		}
+		return $ids;
+	}
+
+	/**
 	 * Shorten absolute paths in a message so the browser never learns where the site lives.
 	 *
 	 * @param string            $message Message.
@@ -365,9 +415,10 @@ class RestController {
 	 * @param int                            $now    Unix time.
 	 * @param callable|null                  $url_for function( backup_id, file_id ): string for download links.
 	 * @param array<int,string>              $roots  Folders to hide in messages.
+	 * @param array<int,array<string,mixed>> $destinations Per destination upload summary (UploadSummary::summarise()).
 	 * @return array<string,mixed>
 	 */
-	public static function payload( array $backup, ?JobState $state, array $files, $now, $url_for = null, array $roots = array() ) {
+	public static function payload( array $backup, ?JobState $state, array $files, $now, $url_for = null, array $roots = array(), array $destinations = array() ) {
 		$status   = (string) $backup['status'];
 		$finished = in_array( $status, BackupsRepository::FINISHED, true );
 
@@ -445,6 +496,7 @@ class RestController {
 			'locked'          => (bool) $backup['locked'],
 			'note'            => (string) $backup['note'],
 			'parts'           => $parts,
+			'destinations'    => array_values( $destinations ),
 			'warnings'        => $warnings,
 			'error'           => $error,
 		);
@@ -503,6 +555,13 @@ class RestController {
 				);
 			}
 
+			$destinations = $request->get_param( 'destinations' );
+			$destinations = null === $destinations ? array() : self::sanitize_destinations( $destinations );
+			$bad          = $this->unusable_destination( $destinations );
+			if ( null !== $bad ) {
+				return $bad;
+			}
+
 			$note = $request->get_param( 'note' );
 			$id   = $backups->create(
 				array(
@@ -516,7 +575,7 @@ class RestController {
 				return self::error( 'ovb_create_failed', __( 'The backup could not be created.', 'openvault-backup' ), 500 );
 			}
 
-			if ( ! ( new JobRunner() )->start( $id ) ) {
+			if ( ! ( new JobRunner() )->start( $id, array() === $destinations ? array() : array( 'destinations' => $destinations ) ) ) {
 				return self::error( 'ovb_start_failed', __( 'The backup could not be started. See the logs for details.', 'openvault-backup' ), 500, array( 'backup_id' => $id ) );
 			}
 		} finally {
@@ -672,6 +731,30 @@ class RestController {
 	// Internals.
 
 	/**
+	 * An error when a selected destination does not exist, needs to be reconnected or has no available provider.
+	 *
+	 * @param int[] $ids Destination ids.
+	 * @return \WP_Error|null
+	 */
+	private function unusable_destination( array $ids ) {
+		$repository = new DestinationsRepository();
+		$registry   = new DestinationRegistry();
+		foreach ( $ids as $id ) {
+			$row = $repository->find( $id );
+			if ( null === $row ) {
+				return self::error( 'ovb_bad_destination', __( 'A selected destination does not exist.', 'openvault-backup' ), 400 );
+			}
+			if ( DestinationsRepository::STATUS_NEEDS_RECONNECT === $row['status'] ) {
+				return self::error( 'ovb_destination_needs_reconnect', __( 'A selected destination must be reconnected before it can be used.', 'openvault-backup' ), 400 );
+			}
+			if ( ! $registry->has( $row['type'] ) ) {
+				return self::error( 'ovb_bad_destination', __( 'A selected destination type is not available.', 'openvault-backup' ), 400 );
+			}
+		}
+		return null;
+	}
+
+	/**
 	 * Run one slice inline when no one else is making progress.
 	 *
 	 * @param int $id Backup id.
@@ -731,7 +814,21 @@ class RestController {
 		$roots[] = WP_CONTENT_DIR;
 		$roots[] = ABSPATH;
 
-		return self::payload( $backup, $state, $files, time(), array( DownloadController::class, 'url' ), $roots );
+		$summary = array();
+		if ( $parts && null !== $state ) {
+			$meta     = $state->get_meta();
+			$selected = UploadPlan::destination_ids( $meta );
+			$rows     = ( new BackupFilesRepository() )->for_backup( $id );
+			if ( array() !== $selected || array() !== $rows ) {
+				$labels = array();
+				foreach ( ( new DestinationsRepository() )->all() as $destination ) {
+					$labels[ $destination['id'] ] = $destination['label'];
+				}
+				$summary = UploadSummary::summarise( $rows, $labels, $selected, isset( $meta['upload'] ) && is_array( $meta['upload'] ) ? $meta['upload'] : array() );
+			}
+		}
+
+		return self::payload( $backup, $state, $files, time(), array( DownloadController::class, 'url' ), $roots, $summary );
 	}
 
 	/**

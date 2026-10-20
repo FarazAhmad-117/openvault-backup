@@ -27,6 +27,14 @@ for i in $(seq 1 60); do
 	[ "$i" = 60 ] && fail "database not reachable"
 done
 
+step "wait for the S3 test server"
+for i in $(seq 1 60); do
+	code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "${OVB_S3_ENDPOINT:-http://s3srv:8333}/" 2>/dev/null)
+	[ "${code:-000}" != 000 ] && break
+	sleep 2
+	[ "$i" = 60 ] && fail "S3 test server not reachable"
+done
+
 step "download WordPress ($WP_VERSION)"
 if [ "$WP_VERSION" = latest ]; then
 	wps core download --force --quiet || fail "core download"

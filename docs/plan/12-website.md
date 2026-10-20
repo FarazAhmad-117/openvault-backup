@@ -1,6 +1,6 @@
 # 12 – Marketing website
 
-**Status: implemented (2026-10-15)**, see `website/README.md` for deploy and sync steps. Approved design (2026-10-15). Lives in `/website`, deployed to Vercel (project root directory `website`).
+**Status: implemented (2026-10-15)**, see `website/README.md` for deploy and sync steps. Approved design (2026-10-15). Lives in `/website`, deployed to Vercel (project root directory `website`). Synced to the 0.2.0 release (local and S3-compatible destinations available; restore, schedules, retention, Google Drive and encryption still planned).
 
 ## Decisions
 | Topic | Decision |

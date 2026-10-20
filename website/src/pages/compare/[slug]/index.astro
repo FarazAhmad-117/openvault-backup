@@ -15,7 +15,7 @@ export function getStaticPaths() {
 const { competitor } = Astro.props;
 const path = `/compare/${competitor.slug}/`;
 const trail = [{ name: 'Home', path: '/' }, { name: 'Compare', path: '/compare/' }, { name: `OpenVault vs ${competitor.name}`, path }];
-const description = `OpenVault Backup vs ${competitor.name}: what OpenVault is designed to do (pre-alpha: local backups only) next to ${competitor.name}'s own sourced facts.`;
+const description = `OpenVault Backup vs ${competitor.name}: what OpenVault is designed to do (pre-alpha: no restore or schedules yet) next to ${competitor.name}'s own sourced facts.`;
 const fits = fitCompetitor[competitor.slug];
 ---
 
@@ -27,8 +27,8 @@ const fits = fitCompetitor[competitor.slug];
   <section class="section">
     <div class="container stack-lg">
       <div class="warn-box" role="note">
-        <h2>OpenVault cannot restore or back up off-site yet</h2>
-        <p>OpenVault 0.1.0 makes local backups only. Every OpenVault statement below describes a design, with its real status badge. If you need working backups today, keep or choose a released plugin.</p>
+        <h2>OpenVault cannot restore, schedule or use Google Drive yet</h2>
+        <p>OpenVault 0.2.0 backs up to your server, S3-compatible storage and a folder. Every OpenVault statement below is a design unless its badge says Available. If you need working backups today, keep or choose a released plugin.</p>
       </div>
 
       <h2 class="sec-title">At a glance</h2>

@@ -28,7 +28,7 @@ const Content = entry ? (await render(entry)).Content : null;
 
   <section class="section">
     <div class="container stack-lg">
-      <OutlineNotice status={status} />
+      <OutlineNotice status={status} message="This guide is still a short outline, without screenshots. The Destinations page in the plugin (0.2.0, pre-alpha) already lets you follow these steps, but only SeaweedFS has been tested against a real server, so details for your provider may differ. Please report problems." />
 
       {Content ? (
         <GuideProse><Content /></GuideProse>

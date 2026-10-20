@@ -42,6 +42,12 @@ rm -rf "$LOGS"
 mkdir -p "$LOGS"
 
 RUN_ID=$$
+# Real S3 server for the destination checks (step 4b). MinIO no longer publishes pullable images, so SeaweedFS is used: it
+# verifies SigV4 signatures and implements multipart upload and ListParts. Test credentials only, never reachable from outside.
+S3_IMAGE=chrislusf/seaweedfs:3.97
+S3_ACCESS=ovbmatrixaccess
+S3_SECRET=ovbmatrixsecret0123456789
+S3_JSON='{"identities":[{"name":"ovb","credentials":[{"accessKey":"'$S3_ACCESS'","secretKey":"'$S3_SECRET'"}],"actions":["Admin","Read","Write","List","Tagging"]}]}'
 CREATED=()
 INFRA_ERRORS='error pulling image|unexpected EOF|request returned 500|TLS handshake timeout|connection reset by peer|failed to copy|i/o timeout'
 
@@ -80,14 +86,20 @@ run_once() {
 		docker build -q -t "$image" --build-arg PHP_VERSION="$php" "$MOUNT/tests/matrix" || { echo "CONTAINER FAIL: image build"; return 1; }
 	fi
 	pull_retry "$db" || { echo "CONTAINER FAIL: could not pull $db (error pulling image)"; return 1; }
+	pull_retry "$S3_IMAGE" || { echo "CONTAINER FAIL: could not pull $S3_IMAGE (error pulling image)"; return 1; }
 	docker network create "$base" >/dev/null || return 1
 	# OVB_MATRIX_DOCKER_ARGS (e.g. "--cpus=0.5") slows containers down to reproduce slow-host timing bugs.
 	# shellcheck disable=SC2086
 	docker run -d --name "$base-db" --network "$base" --network-alias db ${OVB_MATRIX_DOCKER_ARGS:-} \
 		-e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=wp "$db" >/dev/null || { echo "CONTAINER FAIL: db start"; return 1; }
+	# The S3 server may start slowly; container-run.sh waits for it. A server that does not work shows up as failing s3 checks, never as a skip.
+	docker run -d --name "$base-s3" --network "$base" --network-alias s3srv -e S3_CONFIG="$S3_JSON" --entrypoint sh "$S3_IMAGE" -c \
+		'printf "%s" "$S3_CONFIG" > /tmp/s3.json && exec weed server -dir=/data -s3 -s3.config=/tmp/s3.json -master.volumeSizeLimitMB=128 -ip=s3srv' \
+		>/dev/null || { echo "CONTAINER FAIL: s3 server start"; return 1; }
 	# shellcheck disable=SC2086
 	docker run -d --name "$base-web" --network "$base" ${OVB_MATRIX_DOCKER_ARGS:-} \
 		-e WP_VERSION="$wp" -e VARIANT="$variant" -e DB_HOST=db -e LOWER_MIN_WP="$lower" \
+		-e OVB_S3_ENDPOINT=http://s3srv:8333 -e OVB_S3_ACCESS="$S3_ACCESS" -e OVB_S3_SECRET="$S3_SECRET" \
 		-v "$MOUNT:/src:ro" \
 		-v "$MOUNT/tests/matrix/php-$ini.ini:/usr/local/etc/php/conf.d/zz-profile.ini:ro" \
 		"$image" sleep infinity >/dev/null || { echo "CONTAINER FAIL: web start"; return 1; }
@@ -102,7 +114,7 @@ run_profile() {
 		run_once "$id" "$php" "$wp" "$db" "$variant" "$info" "$base" >"$log" 2>&1
 		status=$?
 		[ "$status" = 0 ] && break
-		docker rm -f "$base-web" "$base-db" >/dev/null 2>&1
+		docker rm -f "$base-web" "$base-db" "$base-s3" >/dev/null 2>&1
 		docker network rm "$base" >/dev/null 2>&1
 		if grep -qE "$INFRA_ERRORS" "$log"; then
 			echo "attempt $attempt hit a Docker/registry error, retrying" >>"$LOGS/$id.retries"
@@ -116,7 +128,7 @@ run_profile() {
 	if [ "$KEEP" = 1 ] && [ "$status" != 0 ]; then
 		return "$status" # leave the failing containers up for inspection (already removed above only on retry)
 	fi
-	docker rm -f "$base-web" "$base-db" >/dev/null 2>&1
+	docker rm -f "$base-web" "$base-db" "$base-s3" >/dev/null 2>&1
 	docker network rm "$base" >/dev/null 2>&1
 	return "$status"
 }
@@ -131,7 +143,7 @@ while read -r id php wp db variant info; do
 	fi
 	IDS+=("$id")
 	INFO+=("$info")
-	CREATED+=("ovb-$id-$RUN_ID-web" "ovb-$id-$RUN_ID-db")
+	CREATED+=("ovb-$id-$RUN_ID-web" "ovb-$id-$RUN_ID-db" "ovb-$id-$RUN_ID-s3")
 	echo "== starting $id (PHP $php, WP $wp, $db, $variant)"
 	while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n 2>/dev/null || true; done
 	run_profile "$id" "$php" "$wp" "$db" "$variant" "$info" &

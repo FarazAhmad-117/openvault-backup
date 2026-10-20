@@ -41,7 +41,7 @@ export const providers: Provider[] = [
       },
       {
         q: 'Why does the plugin not use the AWS SDK?',
-        a: 'By design it signs its own requests with Signature Version 4 and sends them through the WordPress HTTP API. The same signing code is meant to serve every S3-compatible provider.',
+        a: 'It signs its own requests with Signature Version 4 and sends them through the WordPress HTTP API. The same signing code serves every S3-compatible provider.',
       },
     ],
   },
@@ -95,7 +95,7 @@ export const providers: Provider[] = [
     faq: [
       {
         q: 'Which B2 key goes where in the plugin?',
-        a: "The planned setup uses the B2 application key as the S3 access key and secret pair. Backblaze's own S3 documentation is the reference for how its key ID and application key map onto those two fields.",
+        a: "The plugin takes the B2 application key as the S3 access key and secret pair. Backblaze's own S3 documentation is the reference for how its key ID and application key map onto those two fields.",
       },
       {
         q: 'Can I use plain HTTP with B2?',

@@ -9,7 +9,7 @@ import { faqPage, breadcrumbs } from '../../lib/jsonld';
 import { guideHref } from '../../lib/guides';
 import { providers } from '../../data/providers';
 
-const description = 'How OpenVault Backup is designed to back up WordPress to S3, Cloudflare R2, Backblaze B2, Wasabi or Spaces with your own bucket. Pre-alpha, not working yet.';
+const description = 'Back up WordPress to S3, Cloudflare R2, Backblaze B2, Wasabi or Spaces with your own bucket. Pre-alpha, tested live against one server only.';
 const trail = [{ name: 'Home', path: '/' }, { name: 'S3 & R2', path: '/s3-r2/' }];
 const status = statusOf('destination-s3');
 const faqs = faqsByTag('s3');
@@ -18,15 +18,15 @@ const genericHref = guideHref('s3-compatible-setup');
 
 <Base title="Back up WordPress to S3, R2, B2 and Wasabi" description={description} path="/s3-r2/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="S3 & R2" path="/s3-r2/" title="Back up WordPress to S3, Cloudflare R2, Backblaze B2 or Wasabi">
-    <p>OpenVault Backup is being built to send backups to a bucket you own, on any S3-compatible service, using access keys you create yourself.</p>
-    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: S3-compatible storage does not work yet. This page describes the design.</span></p>
+    <p>OpenVault Backup can send backups to a bucket you own, on any S3-compatible service, using access keys you create yourself.</p>
+    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: available in 0.2.0, tested live against one S3-compatible server only.</span></p>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
       <div class="warn-box" role="note">
-        <h2>Not working yet</h2>
-        <p>The plugin cannot connect to any S3-compatible service, back up or restore today. Do not rely on it, and do not delete any other backup because of it.</p>
+        <h2>Available in 0.2.0 (pre-alpha), tested live against one server</h2>
+        <p>The plugin can send backups to an S3-compatible bucket. It was tested live against one S3-compatible server (SeaweedFS). Amazon S3, Cloudflare R2, Backblaze B2, Wasabi and DigitalOcean Spaces are covered by unit tests and each provider's documented endpoint pattern, not by real calls, so please report problems. It cannot restore a backup, run schedules or delete old backups yet. Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
       </div>
 
       <h2 class="sec-title">One signer, many providers</h2>
@@ -37,16 +37,16 @@ const genericHref = guideHref('s3-compatible-setup');
         </article>
         <article class="panel stack">
           <h3>No AWS SDK</h3>
-          <p class="muted">The plugin is built to write its own Signature Version 4 signer and send requests with the WordPress HTTP API. That one signer is meant to serve every provider below.</p>
+          <p class="muted">The plugin has its own Signature Version 4 signer and sends requests with the WordPress HTTP API. That one signer serves every provider below.</p>
         </article>
         <article class="panel stack">
           <h3>Presets plus a custom endpoint</h3>
-          <p class="muted">Planned presets cover AWS, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces and IDrive e2. A custom endpoint option takes any other S3-compatible service.</p>
+          <p class="muted">Presets cover AWS, Cloudflare R2, Backblaze B2, Wasabi and DigitalOcean Spaces. A custom endpoint option takes any other S3-compatible service.</p>
         </article>
       </div>
       <ul role="list" class="facts">
-        <li><strong>Multipart uploads</strong><span class="muted">Large archives are designed to be sent in parts, so a big backup does not depend on one long request.</span></li>
-        <li><strong>A manifest with every backup</strong><span class="muted">Each backup also uploads a manifest.json, which lets a fresh install find and re-index it later.</span></li>
+        <li><strong>Multipart uploads</strong><span class="muted">Large archives are sent in parts, and an interrupted upload resumes where it stopped, so a big backup does not depend on one long request.</span></li>
+        <li><strong>A manifest with every backup</strong><span class="muted">Each backup also uploads a manifest.json. Rediscovering backups on a fresh install from it is planned, not built.</span></li>
         <li><strong>Uninstalling keeps your backups</strong><span class="muted">The plugin never deletes backups held at your remote destinations when you uninstall it.</span></li>
       </ul>
     </div>
@@ -83,8 +83,8 @@ const genericHref = guideHref('s3-compatible-setup');
         <h2 class="sec-title">How your keys are protected</h2>
       </div>
       <div class="stack">
-        <p class="muted">By design, access keys and secrets are encrypted at rest in the plugin, using a key derived from your WordPress salts or an <code>OVB_ENCRYPTION_KEY</code> constant that you can set in wp-config. Secrets are never shown again in the interface; you see a masked value and a button to replace it.</p>
-        <p class="muted">This is a design commitment, not a shipped feature. Give each key only what it needs: list, put, get and delete on the one bucket.</p>
+        <p class="muted">Access keys and secrets are encrypted at rest in the plugin, using a key derived from your WordPress salts or an <code>OVB_ENCRYPTION_KEY</code> constant that you can set in wp-config. The secret key is write-only: it is never shown again or logged, and you can only replace it. If you change your salts you must enter the keys again.</p>
+        <p class="muted">Backup archives themselves are not encrypted yet; they travel over HTTPS. Give each key only what it needs: list, put, get and delete on the one bucket.</p>
         <p><a class="btn btn--secondary" href="/security/">Read the security design</a></p>
       </div>
     </div>
@@ -103,7 +103,7 @@ const genericHref = guideHref('s3-compatible-setup');
             <p class="muted">{f.a}</p>
           </div>
         ))}
-        <p class="muted">Prefer a consumer cloud? <a class="link" href="/google-drive/">Google Drive with your own OAuth app</a> is the planned alternative.</p>
+        <p class="muted">Prefer a consumer cloud? <a class="link" href="/google-drive/">Google Drive with your own OAuth app</a> is planned, not built yet.</p>
       </div>
     </div>
   </section>

@@ -2,8 +2,8 @@
 import StatusBadge from './StatusBadge.astro';
 import type { Status } from '../lib/status';
 
-interface Props { status?: Status; unavailable?: string }
-const { status, unavailable = "the plugin's connect screen is not available yet" } = Astro.props;
+interface Props { status?: Status; unavailable?: string; message?: string }
+const { status, unavailable = "the plugin's connect screen is not available yet", message } = Astro.props;
 ---
 
 <aside class="outline-notice" role="note" aria-labelledby="outline-notice-title">
@@ -11,7 +11,7 @@ const { status, unavailable = "the plugin's connect screen is not available yet"
     <h2 id="outline-notice-title">Outline / preview</h2>
     {status && <StatusBadge status={status} />}
   </div>
-  <p class="muted">This describes the planned setup flow; {unavailable}. Nothing here can be followed end to end today, and the steps may change as the feature is built.</p>
+  {message ? <p class="muted">{message}</p> : <p class="muted">This describes the planned setup flow; {unavailable}. Nothing here can be followed end to end today, and the steps may change as the feature is built.</p>}
 </aside>
 
 <style>
