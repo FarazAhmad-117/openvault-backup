@@ -29,11 +29,11 @@ export const openvaultDesign: Record<Topic, DesignPoint> = {
 
 export const fitCompetitor: Record<string, string[]> = {
   updraftplus: [
-    'You need backups that work today. UpdraftPlus is a released plugin on WordPress.org; OpenVault cannot back up a site yet.',
+    'You need backups that work today. UpdraftPlus is a released plugin on WordPress.org; OpenVault cannot restore or send backups off-site yet.',
     'You want the destinations its WordPress.org page lists for the free version, available now.',
   ],
   backwpup: [
-    'You need backups that work today. BackWPup is a released plugin; OpenVault cannot back up a site yet.',
+    'You need backups that work today. BackWPup is a released plugin; OpenVault cannot restore or send backups off-site yet.',
     'You want local, Dropbox, FTP or S3-compatible destinations in a free plugin now, as its WordPress.org page lists.',
   ],
   duplicator: [

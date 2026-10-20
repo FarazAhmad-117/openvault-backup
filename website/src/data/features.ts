@@ -13,12 +13,14 @@ export interface Feature {
 }
 
 export const features: Feature[] = [
-  { id: 'admin-and-system-info', title: 'Admin dashboard shell and System Info', summary: 'See exactly what your server can do before you back up.', status: 'in-progress', phase: 'MVP' }, // flip to 'available' + since: '0.1.0' when the first release is published
-  { id: 'backup-manual', title: 'One-click backups', summary: 'Database, plugins, themes, uploads and more, in resumable chunks.', status: 'in-progress', phase: 'MVP' },
+  { id: 'admin-and-system-info', title: 'Admin dashboard shell and System Info', summary: 'See exactly what your server can do before you back up.', status: 'available', since: '0.1.0', phase: 'MVP' },
+  { id: 'backup-manual', title: 'One-click local backups', summary: 'Database and files, as ZIP or TAR.GZ, split into parts and resumable. Saved in a protected folder on your own server.', status: 'available', since: '0.1.0', phase: 'MVP' },
+  { id: 'backup-manage', title: 'Download, lock and delete backups', summary: 'A backup history with authenticated downloads, a lock against deletion, and cancel for a running backup.', status: 'available', since: '0.1.0', phase: 'MVP' },
   { id: 'backup-scheduled', title: 'Scheduled backups', summary: 'Hourly to monthly schedules powered by Action Scheduler.', status: 'planned', phase: 'MVP' },
   { id: 'destination-gdrive', title: 'Google Drive (your own OAuth app)', summary: 'drive.file scope only. No relay server.', status: 'planned', phase: 'MVP' },
   { id: 'destination-s3', title: 'S3-compatible storage', summary: 'AWS S3, Cloudflare R2, Backblaze B2, Wasabi, DigitalOcean Spaces.', status: 'planned', phase: 'MVP' },
-  { id: 'destination-local', title: 'Local storage', summary: 'A protected folder on your own server.', status: 'planned', phase: 'MVP' },
+  { id: 'destination-local', title: 'Local storage', summary: 'A protected folder on your own server. Backups already go there; choosing a destination is not built yet.', status: 'in-progress', phase: 'MVP' },
+  { id: 'backup-retention', title: 'Retention rules', summary: 'Keep the last N backups or the last X days, with locked backups kept.', status: 'planned', phase: 'MVP' },
   { id: 'restore-in-place', title: 'Restore from history', summary: 'Full, database-only or files-only, with a safety snapshot first.', status: 'planned', phase: 'MVP' },
   { id: 'restore-upload', title: 'Restore from an uploaded archive', summary: 'Chunked upload and remote re-indexing via manifest.json.', status: 'planned', phase: 'Phase 2' },
   { id: 'encryption', title: 'AES-256 encryption', summary: 'Encrypt archives before they leave your server.', status: 'planned', phase: 'Phase 2' },

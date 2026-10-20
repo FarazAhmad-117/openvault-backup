@@ -7,6 +7,10 @@ openvault-backup/
 |-- assets
 |   |-- admin
 |   |   |-- css
+|   |   |   `-- admin.css
+|   |   |-- js
+|   |   |   |-- backup-now.js
+|   |   |   `-- history.js
 |   |   `-- src
 |   |-- images
 |   |   `-- guides
@@ -35,6 +39,9 @@ openvault-backup/
 |       `-- 11-testing-and-release.md
 |-- includes
 |   |-- Admin
+|   |   |-- Assets.php
+|   |   |-- BackupRowPresenter.php
+|   |   |-- BackupsListTable.php
 |   |   |-- Pages
 |   |   |   |-- BackupNowPage.php
 |   |   |   |-- DashboardPage.php
@@ -48,12 +55,14 @@ openvault-backup/
 |   |   |   `-- SystemInfoPage.php
 |   |   `-- Menu.php
 |   |-- Archive
+|   |   |-- ArchiveException.php
 |   |   |-- ArchiverInterface.php
 |   |   |-- CapabilityDetector.php
 |   |   |-- Encryptor.php
 |   |   |-- Splitter.php
 |   |   |-- TarBz2Archiver.php
 |   |   |-- TarGzArchiver.php
+|   |   |-- TarWriter.php
 |   |   `-- ZipArchiver.php
 |   |-- Cli
 |   |   `-- Commands.php
@@ -68,7 +77,8 @@ openvault-backup/
 |   |   |-- BackupsRepository.php
 |   |   |-- DestinationsRepository.php
 |   |   |-- LogsRepository.php
-|   |   `-- SchedulesRepository.php
+|   |   |-- SchedulesRepository.php
+|   |   `-- Util.php
 |   |-- Destinations
 |   |   |-- Dropbox
 |   |   |   `-- DropboxDestination.php
@@ -89,20 +99,44 @@ openvault-backup/
 |   |   |-- DestinationInterface.php
 |   |   `-- DestinationRegistry.php
 |   |-- Engine
+|   |   |-- Dump
+|   |   |   |-- BatchSizer.php
+|   |   |   |-- DumpException.php
+|   |   |   |-- ExclusionRules.php
+|   |   |   |-- SqlDumpWriter.php
+|   |   |   |-- SqlValueFormatter.php
+|   |   |   |-- TableInspector.php
+|   |   |   `-- TableList.php
+|   |   |-- Scan
+|   |   |   |-- AppendFile.php
+|   |   |   |-- ContentSelector.php
+|   |   |   |-- EntryName.php
+|   |   |   |-- LineReader.php
+|   |   |   `-- PathFilter.php
 |   |   |-- Steps
 |   |   |   |-- ArchiveStep.php
 |   |   |   |-- CleanupStep.php
 |   |   |   |-- DatabaseExportStep.php
 |   |   |   |-- EncryptStep.php
 |   |   |   |-- FileScanStep.php
+|   |   |   |-- PreflightChecks.php
 |   |   |   |-- PreflightStep.php
 |   |   |   |-- RetentionStep.php
 |   |   |   |-- StepInterface.php
 |   |   |   `-- UploadStep.php
+|   |   |-- Budget.php
+|   |   |-- JobContext.php
+|   |   |-- JobLock.php
 |   |   |-- JobRunner.php
-|   |   `-- JobState.php
+|   |   |-- JobState.php
+|   |   |-- LockStore.php
+|   |   |-- OptionsLockStore.php
+|   |   |-- Progress.php
+|   |   `-- StepResult.php
 |   |-- Notifications
 |   |   `-- Notifier.php
+|   |-- Backups
+|   |   `-- BackupFiles.php
 |   |-- Rest
 |   |   `-- RestController.php
 |   |-- Restore
@@ -119,10 +153,12 @@ openvault-backup/
 |   |   `-- Scheduler.php
 |   |-- Security
 |   |   |-- CredentialVault.php
-|   |   `-- DownloadController.php
+|   |   |-- DownloadController.php
+|   |   `-- DownloadHelper.php
 |   `-- Support
 |       |-- Logger.php
 |       |-- Manifest.php
+|       |-- Paths.php
 |       `-- SystemInfo.php
 |-- languages
 |-- lib

@@ -25,7 +25,7 @@ const items: Item[] = [
 ];
 
 const faqs = [
-  { q: 'Can I restore a WordPress site with OpenVault today?', a: 'No. OpenVault Backup is pre-alpha and cannot back up or restore yet. Keep using your current backup solution, and do not delete existing backups because of this plugin.' },
+  { q: 'Can I restore a WordPress site with OpenVault today?', a: 'No. OpenVault Backup is pre-alpha: it can make local backups and let you download them, but it cannot restore yet. Keep using your current backup solution, and do not delete existing backups because of this plugin.' },
   { q: 'What happens to the plugin itself when a restore replaces my database?', a: 'By design, the plugin exports its own tables, settings and destination credentials before a database import and re-applies them afterwards, and it never overwrites its own folder. This is a design, not a shipped feature.' },
   { q: 'Can OpenVault move my site to a new domain?', a: 'Not yet. Migration with serialized-safe search and replace is planned for Phase 3, and nothing in the plugin does it today.' },
 ];
@@ -41,7 +41,7 @@ const faqs = [
     <div class="container stack-lg">
       <div class="warn-box" role="note">
         <h2>Restore does not work yet</h2>
-        <p>The plugin cannot back up, restore or migrate a site today. Keep using your current backup solution, and do not delete any other backup because of it.</p>
+        <p>The plugin cannot restore or migrate a site today; a downloaded backup can only be unpacked by hand. Keep using your current backup solution, and do not delete any other backup because of it.</p>
       </div>
 
       <h2 class="sec-title">How it is designed to work</h2>

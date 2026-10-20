@@ -57,3 +57,14 @@ id, backup_id NULL (indexed), level (indexed: debug/info/warning/error), message
 
 ## Options (wp_options)
 `ovb_settings` (global settings), `ovb_db_version`, `ovb_local_dir` (random folder name under wp-content), `ovb_installed_at`
+
+## Repositories and stored values (Milestone 2 step 2)
+
+All repositories live in `includes/Database/` and share `Database\Util` (pagination clamp, date and integer validation, safe JSON decode). They take the table prefix from `$wpdb`, bind every value, return typed arrays (never `stdClass`) and read invalid or NULL JSON as an empty array.
+
+- **Pagination**: `per_page` is clamped to 1..200 (default 20), `page` to >= 1; results are `[ 'items' => [...], 'total' => int ]`. Unknown filter values are dropped, never passed to SQL; order columns and directions are whitelisted.
+- **Backups**: `trigger_type` = manual / schedule / pre-update / pre-restore; `status` = queued / running / uploading / complete / failed / partial; `format` = zip / zip-store / tar.gz / tar.bz2. `started_at` is set the first time a backup becomes `running`, `finished_at` when it becomes complete, failed or partial. The `state` column (JobState JSON) is only read and written through `load_state()` / `save_state()`; a missing or corrupt value loads as `null`. Notes are limited to 1000 characters. Removing a locked backup is refused unless forced; removing a backup also removes its `backup_files` rows (not the archive files).
+- **Backup files**: `file_name` follows the manifest rule (no `/`, `\`, `..`, control characters, max 255). `checksum_sha256` is 64 lower-case hex characters or `''`. `upload_status` = pending / uploading / done / failed. `destination_id` 0 = local. `next_pending()` returns an `uploading` row first (so an interrupted upload resumes), otherwise the lowest-numbered `pending` row.
+- **Destinations**: `type` matches `^[a-z0-9_-]{1,20}$`. `status` = `new` (never tested, or credentials just replaced), `connected`, `error` (last test failed), `needs_reconnect` (stored credentials cannot be decrypted with the current key). `credentials` is only ever a `CredentialVault` envelope (`ovb1:...`), or `''` when a destination has none. Normal reads select explicit columns, never `credentials`, and add a computed `has_credentials`. `last_error` is scrubbed of tokens and limited to 500 characters.
+- **Schedules**: `recurrence` = hourly / daily / weekly / monthly / custom; `destination_ids` is a JSON list of positive integers; `retention` is `{"keep_last": int, "keep_days": int}` (0 = unlimited, unknown keys dropped). `due( $now )` returns enabled schedules with `next_run_at <= now`, earliest first.
+- **Logs**: `paginate()` filters by level, backup, message text and date range; `delete_all()` clears the table with a plain row removal (no TRUNCATE privilege needed).

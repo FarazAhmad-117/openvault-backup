@@ -13,7 +13,7 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'Compare', path: '/compare/'
 const faqs = [
   {
     q: 'Is OpenVault ready to replace my current backup plugin?',
-    a: 'No. OpenVault Backup is pre-alpha and cannot back up or restore a site yet. Keep your current backups running, and do not delete them because of anything on this site.',
+    a: 'No. OpenVault Backup is pre-alpha. It can make local backups of the database and files, but it cannot restore them, run schedules or send backups off-site yet. Keep your current backup solution running, and do not delete existing backups because of anything on this site.',
   },
   {
     q: 'What should I check when choosing a WordPress backup plugin?',
@@ -37,7 +37,7 @@ const designs: [string, string, readonly (readonly [string, string])[]][] = [
 <Base title="Free WordPress backup plugin: how OpenVault compares" description={description} path="/compare/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Compare" path="/compare/" title="Free WordPress backup plugin: how OpenVault compares">
     <p>OpenVault Backup is being built as a free, open-source backup plugin. These pages put its design next to what other plugins say about themselves.</p>
-    <p class="status-line"><StatusBadge status={statusOf('backup-manual')} /> <span class="small">Pre-alpha: it cannot back up or restore yet. Everything below about OpenVault is a design.</span></p>
+    <p class="status-line"><StatusBadge status={statusOf('backup-manual')} /> <span class="small">Pre-alpha: local backups work; restore, schedules and off-site storage do not yet. Everything below about OpenVault is a design unless its badge says Available.</span></p>
   </PageHead>
 
   <section class="section">

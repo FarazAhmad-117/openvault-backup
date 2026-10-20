@@ -27,13 +27,13 @@ const flow = [
   },
   {
     title: 'Upload, with a manifest',
-    text: 'Archives are uploaded in parts with retries. A manifest.json is written next to every backup so a fresh install can rediscover it.',
-    badges: [['Backups', 'backup-manual']],
+    text: 'Archives are saved in parts, with a manifest.json written next to every backup so a fresh install can rediscover it. Uploading the parts to a remote destination, with retries, is planned.',
+    badges: [['Parts and manifest', 'backup-manual'], ['Remote upload', 'destination-s3']],
   },
   {
     title: 'Apply retention',
-    text: 'Keep the last N backups or the last X days, set per destination, with a lock to keep a backup forever.',
-    badges: [['Backups', 'backup-manual']],
+    text: 'Keep the last N backups or the last X days, set per destination, with a lock to keep a backup forever. The lock exists today; automatic retention is planned.',
+    badges: [['Lock', 'backup-manage'], ['Retention', 'backup-retention']],
   },
   {
     title: 'Restore with a safety snapshot',

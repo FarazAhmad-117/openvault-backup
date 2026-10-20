@@ -10,5 +10,8 @@ php84	8.4	latest	mariadb:11.4	single	no
 multisite	8.2	latest	mysql:8.0	multisite	no
 restricted	8.1	6.9	mysql:8.0	restricted	no
 lowmem	7.4	6.9	mariadb:10.6	lowmem	no
+wp67-info	8.2	6.7	mysql:8.0	single	yes
+wp66-info	8.2	6.6	mariadb:10.11	single	yes
+wp65-info	8.1	6.5	mysql:8.0	single	yes
 wp68-info	8.3	6.8	mysql:8.0	single	yes
 wp64-info	8.1	6.4	mysql:8.0	single	yes

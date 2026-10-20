@@ -119,6 +119,9 @@ if grep -q "5 of 5 present" <<<"$body"; then echo "PASS system info shows 5 of 5
 anon=$(code "$URL/wp-admin/admin.php?page=openvault-system")
 if [ "$anon" = 302 ]; then echo "PASS anonymous request is redirected to login"; else echo "FAIL anonymous access returned $anon"; CHECK_STATUS=1; fi
 
+# shellcheck source=tests/matrix/http-e2e.sh
+source /src/tests/matrix/http-e2e.sh
+
 step "PHP problems attributable to the plugin"
 LOG=/var/www/html/wp-content/debug.log
 if [ -f "$LOG" ] && grep -E "PHP (Warning|Notice|Deprecated|Fatal error|Parse error)" "$LOG" | grep -q "openvault-backup"; then

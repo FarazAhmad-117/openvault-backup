@@ -13,7 +13,7 @@ export const milestones: Milestone[] = [
     id: 'alpha',
     name: 'Alpha',
     channel: 'GitHub',
-    summary: 'The core loop works end to end.',
+    summary: 'The core loop works end to end. Backup works in 0.1.0; restore is the missing half.',
     exit: ['Backup and restore round trip works on 3 test hosts'],
     phases: 'Core of the MVP',
   },

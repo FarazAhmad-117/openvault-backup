@@ -6,7 +6,7 @@
  *
  * Purpose: PHP/WP versions, limits, extensions, disk space, cron health, supported formats.
  *
- * The "formats" rows are a provisional check; Archive\CapabilityDetector will replace them.
+ * The "formats" rows come from Archive\CapabilityDetector.
  * Nothing secret is collected. Folder names of the local backup directory are not exposed.
  *
  * @package OpenVault\Backup
@@ -14,6 +14,7 @@
 
 namespace OpenVault\Backup\Support;
 
+use OpenVault\Backup\Archive\CapabilityDetector;
 use OpenVault\Backup\Core\Installer;
 
 defined( 'ABSPATH' ) || exit;
@@ -74,7 +75,7 @@ class SystemInfo {
 			__( 'PHP extensions', 'openvault-backup' )     => self::extensions_section(),
 			__( 'Storage', 'openvault-backup' )            => self::storage_section(),
 			__( 'Cron and scheduler', 'openvault-backup' ) => self::cron_section(),
-			__( 'Archive formats (provisional)', 'openvault-backup' ) => self::formats_section(),
+			__( 'Archive formats', 'openvault-backup' )    => self::formats_section(),
 		);
 	}
 
@@ -249,18 +250,19 @@ class SystemInfo {
 	}
 
 	/**
-	 * Archive format rows (simple extension checks until CapabilityDetector exists).
+	 * Archive format rows (from CapabilityDetector).
 	 *
 	 * @return array<string,string>
 	 */
 	private static function formats_section() {
-		$yes = __( 'Supported', 'openvault-backup' );
-		$no  = __( 'Not supported', 'openvault-backup' );
+		$detector = new CapabilityDetector();
+		$yes      = __( 'Supported', 'openvault-backup' );
+		$no       = __( 'Not supported', 'openvault-backup' );
 
 		return array(
-			__( 'ZIP (deflate, store)', 'openvault-backup' ) => class_exists( 'ZipArchive' ) ? $yes : $no,
-			__( 'TAR.GZ', 'openvault-backup' )            => extension_loaded( 'zlib' ) ? $yes : $no,
-			__( 'TAR.BZ2 (Phase 2)', 'openvault-backup' ) => extension_loaded( 'bz2' ) ? $yes : $no,
+			__( 'ZIP (deflate, store)', 'openvault-backup' ) => $detector->is_available( CapabilityDetector::ZIP ) && $detector->is_available( CapabilityDetector::ZIP_STORE ) ? $yes : $no,
+			__( 'TAR.GZ', 'openvault-backup' )            => $detector->is_available( CapabilityDetector::TAR_GZ ) ? $yes : $no,
+			__( 'TAR.BZ2 (Phase 2)', 'openvault-backup' ) => $detector->is_available( CapabilityDetector::TAR_BZ2 ) ? $yes : $no,
 		);
 	}
 }

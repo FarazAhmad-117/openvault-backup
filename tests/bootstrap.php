@@ -12,3 +12,10 @@ if ( ! defined( 'ABSPATH' ) ) {
 
 require_once dirname( __DIR__ ) . '/vendor/autoload.php';
 require_once __DIR__ . '/phpstan-bootstrap.php';
+
+// Minimal stand-ins for WordPress i18n helpers so pure classes that return translatable text can be unit tested.
+if ( ! function_exists( '__' ) ) {
+	function __( $text, $domain = 'default' ) { // phpcs:ignore
+		return $text;
+	}
+}

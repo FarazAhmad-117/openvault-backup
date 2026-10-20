@@ -53,11 +53,15 @@ export const faqs: Faq[] = [
   },
   {
     q: 'Will it work on shared hosting?',
-    a: 'It is designed for it. Every long task is built to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory. The pre-alpha is tested in Docker profiles, including low-memory and restricted ones, but it has not yet been proven on real shared hosts.',
+    a: 'It is designed for it. Every long task is built to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory. The pre-alpha 0.1.0 is tested in Docker profiles, including low-memory and restricted ones, but it has not yet been proven on real shared hosts.',
   },
   {
-    q: 'When will backups actually work?',
-    a: 'Not yet. The plugin is pre-alpha and cannot back up or restore sites. The first milestone, Alpha, is a backup and restore round trip working on three test hosts. There are no dates; see the roadmap for the milestones and where each feature stands.',
+    q: 'What can the pre-alpha do today?',
+    a: 'Version 0.1.0 creates backups of your database and files (ZIP or TAR.GZ, split into parts), keeps them in a protected folder on your own server, and lets you download, lock or delete them. It cannot restore, run schedules or send backups to Google Drive or S3. Backups on the same server do not protect you if you lose the server.',
+  },
+  {
+    q: 'When will restore and Google Drive work?',
+    a: 'Not yet, and there are no dates. Restore is the next half of the core loop, and Google Drive and S3 destinations are planned after it. The roadmap shows each milestone and where every feature stands.',
   },
 ];
 

@@ -45,7 +45,7 @@ const destinations = [
 
 const steps = [
   { title: 'Connect your storage', text: 'Add your own Google Drive app or S3-compatible keys. You stay in control of the credentials.', id: 'destination-s3' },
-  { title: 'Choose what and when', text: 'Pick database, plugins, themes and uploads, then run it by hand or on a schedule.', id: 'backup-manual' },
+  { title: 'Choose what and when', text: 'Pick database, plugins, themes and uploads and run it by hand. Schedules are planned.', id: 'backup-manual' },
   { title: 'Restore with a safety net', text: 'Restore from history, with a safety snapshot taken before anything is overwritten.', id: 'restore-in-place' },
 ];
 
@@ -70,7 +70,7 @@ const faq = featuredFaqs;
   <aside class="strip" aria-label="Project status">
     <div class="container strip-in">
       <StatusBadge status="in-progress" />
-      <p>Pre-alpha: the foundation is built; backups are in progress.</p>
+      <p>Pre-alpha: it creates local backups of your database and files and lets you download them. It cannot restore, schedule or send backups to Google Drive or S3 yet.</p>
       <a class="link" href="/roadmap/">See the roadmap</a>
     </div>
   </aside>
@@ -160,7 +160,7 @@ const faq = featuredFaqs;
   <section class="section cta">
     <div class="container stack-lg">
       <h2 class="sec-title">Follow the build, or try the pre-alpha.</h2>
-      <p class="lede">The plugin cannot back up or restore sites yet. Download it to follow along, test the foundation, or contribute.</p>
+      <p class="lede">The plugin can make local backups of your database and files, but it cannot restore them, run schedules or send them to Google Drive or S3 yet. Do not rely on it as your only backup. Download it to test, follow along or contribute.</p>
       <div class="cluster">
         <DownloadButton />
         <a class="btn btn--secondary" href={repoUrl()} rel="noopener">Star on GitHub</a>

@@ -1,0 +1,161 @@
+/* OpenVault Backup admin styles. Small on purpose: native WordPress look, no framework. */
+
+.ovb-wrap .ovb-form {
+	max-width: 760px;
+}
+
+.ovb-fieldset {
+	margin: 0 0 20px;
+	padding: 12px 16px 4px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+}
+
+.ovb-fieldset legend {
+	padding: 0 6px;
+	font-weight: 600;
+}
+
+.ovb-option {
+	margin: 0 0 12px;
+}
+
+.ovb-help {
+	display: block;
+	margin: 2px 0 0 24px;
+}
+
+#ovb-note-help {
+	margin-left: 0;
+}
+
+.ovb-panel {
+	max-width: 760px;
+	margin: 20px 0;
+	padding: 4px 16px 12px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+}
+
+.ovb-bar-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.ovb-bar {
+	flex: 1;
+	height: 20px;
+	accent-color: #2271b1;
+}
+
+.ovb-percent {
+	min-width: 3em;
+	font-weight: 600;
+	text-align: right;
+}
+
+.ovb-live {
+	min-height: 1.4em;
+	font-weight: 600;
+}
+
+.ovb-meta {
+	margin: 4px 0;
+	color: #50575e;
+}
+
+.ovb-summary {
+	margin-top: 16px;
+	padding-top: 8px;
+	border-top: 1px solid #dcdcde;
+}
+
+.ovb-downloads-list {
+	margin: 0 0 16px 18px;
+	list-style: disc;
+}
+
+/* Status badges: the text is always shown, the colour only supports it. */
+.ovb-status {
+	display: inline-block;
+	padding: 2px 8px;
+	border: 1px solid currentcolor;
+	border-radius: 3px;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.5;
+}
+
+.ovb-status--complete {
+	color: #006908;
+	background: #edfaef;
+}
+
+.ovb-status--partial {
+	color: #7a4d00;
+	background: #fcf9e8;
+}
+
+.ovb-status--failed {
+	color: #b32d2e;
+	background: #fcf0f1;
+}
+
+.ovb-status--queued,
+.ovb-status--running,
+.ovb-status--uploading {
+	color: #135e96;
+	background: #f0f6fc;
+}
+
+.ovb-status--unknown {
+	color: #50575e;
+	background: #f6f7f7;
+}
+
+.ovb-empty {
+	max-width: 760px;
+	padding: 8px 16px;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+}
+
+/* History: download list under the date. Open by default; JS (class ovb-js) collapses it. */
+.ovb-downloads ul {
+	margin: 6px 0 0 16px;
+	list-style: disc;
+}
+
+.ovb-js .ovb-downloads {
+	display: none;
+}
+
+.ovb-js .ovb-downloads.is-open {
+	display: block;
+}
+
+.ovb-wrap .column-created {
+	width: 22%;
+}
+
+.ovb-wrap .column-parts,
+.ovb-wrap .column-size {
+	width: 8%;
+}
+
+.ovb-wrap [aria-disabled="true"] {
+	opacity: 0.5;
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.ovb-bar {
+		transition: none;
+	}
+}
+
+/* WordPress button styles would otherwise override the hidden attribute. */
+.ovb-wrap [hidden] {
+	display: none !important;
+}
