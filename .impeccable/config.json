@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "geist mono",
+        "createdAt": "2026-10-21T10:51:30.391Z"
+      },
+      {
+        "rule": "overused-font",
+        "value": "instrument serif",
+        "createdAt": "2026-10-21T10:51:30.561Z"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-21T10:51:30.639Z"
+      }
+    ]
+  }
+}
