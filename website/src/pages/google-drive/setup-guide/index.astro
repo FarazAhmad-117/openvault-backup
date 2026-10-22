@@ -4,6 +4,7 @@ import Base from '../../../layouts/Base.astro';
 import PageHead from '../../../components/PageHead.astro';
 import OutlineNotice from '../../../components/OutlineNotice.astro';
 import GuideProse from '../../../components/GuideProse.astro';
+import Drive from '../../../components/art/Drive.astro';
 import { siteUrl } from '../../../config/site';
 import { statusOf } from '../../../lib/registry';
 import { breadcrumbs } from '../../../lib/jsonld';
@@ -29,25 +30,26 @@ const errors = [
 <Base title="Google Drive setup guide" description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Setup guide" path={path} title="Google Drive setup guide" trail={[{ name: 'Google Drive', href: '/google-drive/' }]}>
     <p>The planned steps to connect Google Drive with your own Google Cloud project.</p>
+    <div slot="visual" class="art--planned" aria-hidden="true"><Drive /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
       <OutlineNotice status={status} />
 
-      <div class="warn-box" role="note">
+      <div class="warn-box" role="note" data-reveal>
         <h2>Publish the app, or access expires after 7 days</h2>
         <p>A Google OAuth app left in Testing status loses access after 7 days, and backups would stop. Step 8 sets the publishing status to In production. Do not skip it.</p>
       </div>
 
       {Content ? (
-        <GuideProse><Content /></GuideProse>
+        <div data-reveal><GuideProse><Content /></GuideProse></div>
       ) : (
         <p class="muted">The outline for this guide could not be loaded.</p>
       )}
 
       <div class="stack">
-        <h2 class="sec-title">If something goes wrong</h2>
+        <h2 class="sec-title" data-reveal>If something goes wrong</h2>
         <dl class="errs">
           {errors.map((e) => (
             <div>
@@ -58,9 +60,9 @@ const errors = [
         </dl>
       </div>
 
-      <nav class="pn" aria-label="Guide navigation">
-        <a class="btn btn--secondary" href="/google-drive/">Previous: Google Drive overview</a>
-        <a class="btn btn--secondary" href="/docs/">Next: All guides</a>
+      <nav class="pn" aria-label="Guide navigation" data-reveal>
+        <a class="pn-link" href="/google-drive/" data-cursor="Prev"><span class="mono">Previous</span><span class="pn-name">&larr; Google Drive overview</span></a>
+        <a class="pn-link pn-next" href="/docs/" data-cursor="Next"><span class="mono">Next</span><span class="pn-name">All guides &rarr;</span></a>
       </nav>
     </div>
   </section>
@@ -71,6 +73,11 @@ const errors = [
   .errs div { display: grid; gap: var(--space-1); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
   .errs dt { font-weight: 600; overflow-wrap: anywhere; }
   .errs dd { margin: 0; }
-  .pn { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-  .pn .btn { flex: 1 1 14rem; max-width: 22rem; }
+  .pn { display: grid; border-block: 1px solid var(--line-strong); }
+  .pn-link { display: grid; gap: var(--space-2); padding: var(--space-6) 0; text-decoration: none; background: none; transition: color 0.3s; }
+  .pn-link .mono { color: var(--muted); }
+  .pn-name { font-family: var(--font-display); font-size: clamp(2rem, 1rem + 4vw, 4.5rem); line-height: 1; letter-spacing: -0.02em; }
+  .pn-link:hover, .pn-link:focus-visible { color: var(--accent); }
+  .pn-link + .pn-link { border-top: 1px solid var(--line); }
+  @media (min-width: 48rem) { .pn { grid-template-columns: 1fr 1fr; } .pn-link + .pn-link { border-top: 0; border-left: 1px solid var(--line); padding-left: var(--space-6); } .pn-next { text-align: right; justify-items: end; padding-right: 0; } }
 </style>

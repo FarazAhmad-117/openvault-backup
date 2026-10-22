@@ -34,6 +34,7 @@ $expected_columns = array(
 	'destinations' => array( 'id', 'type', 'settings', 'credentials', 'last_tested_at' ),
 	'schedules'    => array( 'id', 'recurrence', 'enabled', 'next_run_at', 'retention' ),
 	'logs'         => array( 'id', 'backup_id', 'level', 'message', 'context', 'created_at' ),
+	'restores'     => array( 'id', 'backup_id', 'mode', 'status', 'step', 'state', 'snapshot_backup_id', 'error', 'created_by' ),
 );
 foreach ( $expected_columns as $table => $columns ) {
 	$full = $wpdb->prefix . 'ovb_' . $table;
@@ -101,7 +102,7 @@ foreach ( OpenVault\Backup\Admin\Menu::pages() as $slug => $page_class ) {
 $info = OpenVault\Backup\Support\SystemInfo::collect();
 $flat = OpenVault\Backup\Support\SystemInfo::as_text( $info );
 ovb_check( 'system info has PHP version', false !== strpos( $flat, PHP_VERSION ) );
-ovb_check( 'system info sees all 5 tables', false !== strpos( $flat, '5 of 5 present' ) );
+ovb_check( 'system info sees all 6 tables', false !== strpos( $flat, '6 of 6 present' ) );
 
 // 10. Repositories against the real MySQL/MariaDB. Everything created here is removed again.
 function ovb_throws( $callable ) {
@@ -3400,6 +3401,711 @@ try {
 	}
 }
 ovb_check( 'dest 4c: destinations, backup, folders and locks cleaned up', 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}destinations WHERE label LIKE 'Matrix 4c%'" ) && ! file_exists( $ovb_d_dir ) && 0 === count( glob( Paths::backups_dir() . '/*', GLOB_ONLYDIR ) ?: array() ) && 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'ovb\\_lock\\_%'" ) );
+
+// 18. Restore engine core (Milestone 5, step 5a): the restores table (migration 2 from a schema-1 site), then a REAL backup (database +
+// a 18 MB uploads fixture in 8 MB parts) to a Local destination folder and to the matrix's real S3 server, restored through
+// RestoreManager / RestoreRunner from every source with a tiny budget: the local copy (read in place, nothing copied), a destination
+// folder only, S3 only, an automatic fallback when a destination has lost its files, a damaged local copy (fallback), every copy
+// damaged (clear failure), garbage past the saved offset and an older cursor replayed during a download, every preflight refusal on
+// the real site, concurrency with backups, cancel, stalled recovery. Everything created here is removed again.
+use OpenVault\Backup\Database\RestoresRepository;
+use OpenVault\Backup\Restore\PlanLoader;
+use OpenVault\Backup\Restore\RestoreManager;
+use OpenVault\Backup\Restore\RestoreMeta;
+use OpenVault\Backup\Restore\RestoreRunner;
+use OpenVault\Backup\Restore\RestoreWorkDir;
+use OpenVault\Backup\Restore\RestorePreflight;
+use OpenVault\Backup\Restore\Steps\PreflightStep as RestorePreflightStep;
+
+if ( ! class_exists( 'OvbLenientPreflight' ) ) {
+	/**
+	 * The restore engine tests of step 5a exercise fetch and verify for every mode with the REAL rules (all three modes are available since
+	 * step 5c). The one rule they must not meet is "a multisite network cannot be restored": nothing is applied in these tests, so this preflight
+	 * only forgets that the site is a network. The refusal itself is asserted on its own (sections 19 and 20).
+	 */
+	class OvbLenientPreflight extends RestorePreflight {
+		public function gather( array $loaded, array $ack, $own_id ) {
+			$facts              = parent::gather( $loaded, $ack, $own_id );
+			$facts['multisite'] = false;
+			return $facts;
+		}
+	}
+}
+
+/** Run a restore job slice after slice (like Action Scheduler would), clearing the queued action first. */
+function ovb_rs_drive( RestoreRunner $runner, $id, $each = null, $max = 900 ) {
+	$outcomes = array();
+	for ( $i = 0; $i < $max; $i++ ) {
+		as_unschedule_all_actions( RestoreRunner::ACTION, array( (int) $id ), RestoreRunner::GROUP );
+		$out        = $runner->run( $id );
+		$outcomes[] = $out;
+		if ( null !== $each ) {
+			call_user_func( $each, $out, $i );
+		}
+		if ( ! in_array( $out, array( 'continued', 'waiting', 'retry' ), true ) ) {
+			break;
+		}
+	}
+	return $outcomes;
+}
+
+function ovb_rs_work( $id ) {
+	return Paths::tmp_dir() . '/restore-' . (int) $id;
+}
+
+function ovb_rs_lock_value() {
+	global $wpdb;
+	return $wpdb->get_var( "SELECT option_value FROM {$wpdb->options} WHERE option_name = 'ovb_lock_restore'" );
+}
+
+function ovb_rs_flip( $path ) {
+	$data     = file_get_contents( $path );
+	$data[10] = chr( ord( $data[10] ) ^ 1 );
+	file_put_contents( $path, $data );
+}
+
+/** Rewrite the manifest of the local copy; returns the original text so the caller can put it back. */
+function ovb_rs_edit_manifest( $path, $mutate ) {
+	$original = file_get_contents( $path );
+	$fields   = json_decode( $original, true );
+	file_put_contents( $path, wp_json_encode( call_user_func( $mutate, $fields ), JSON_UNESCAPED_SLASHES ) );
+	return $original;
+}
+
+/** Overwrite an S3 object with the same bytes but one flipped bit. */
+function ovb_rs_s3_corrupt( S3Destination $s3, $ref, $tmp_dir ) {
+	$buffer = '';
+	$s3->download(
+		$ref,
+		static function ( $chunk ) use ( &$buffer ) {
+			$buffer .= $chunk;
+		}
+	);
+	$buffer[10] = chr( ord( $buffer[10] ) ^ 1 );
+	$tmp        = $tmp_dir . '/corrupt.bin';
+	file_put_contents( $tmp, $buffer );
+	$session = $s3->begin_upload( $ref, strlen( $buffer ) );
+	do {
+		$progress = $s3->upload_chunk( $session, $tmp, new Budget( 600, PHP_INT_MAX ) );
+		$session  = $progress->session();
+	} while ( ! $progress->done() );
+	unlink( $tmp );
+}
+
+$ovb_rs_restore_ids = array();
+$ovb_rs_dest_ids    = array();
+$ovb_rs_job         = 0;
+$ovb_rs_settings    = get_option( 'ovb_settings' );
+$ovb_rs_bucket      = 'ovb-rs-' . strtolower( wp_generate_password( 8, false ) );
+$ovb_rs_dest_path   = WP_CONTENT_DIR . '/ovb-rs-dest';
+$ovb_rs_uploads     = wp_get_upload_dir();
+$ovb_rs_fixture     = $ovb_rs_uploads['basedir'] . '/ovb-rs-fixture';
+$ovb_rs_decoys      = array();
+$ovb_rs_primary     = '';
+$ovb_rs_s3          = null;
+$ovb_rs_folder      = '';
+$ovb_rs_restores    = $ovb_prefix . 'restores';
+$ovb_rs_rrepo       = new RestoresRepository();
+$bucket_gone        = 200;
+$drepo              = new DestinationsRepository();
+
+try {
+	// 18a. Migration 2 on a site that is at schema 1.
+	$wpdb->query( "DROP TABLE IF EXISTS `{$ovb_rs_restores}`" );
+	update_option( 'ovb_db_version', '1' );
+	ovb_check( 'restore schema: with the schema at 1 and no restores table, the table is missing', null === $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $wpdb->esc_like( $ovb_rs_restores ) ) ) );
+	OpenVault\Backup\Core\Installer::maybe_upgrade();
+	$restore_columns = (array) $wpdb->get_col( "SHOW COLUMNS FROM `{$ovb_rs_restores}`" );
+	ovb_check( 'restore schema: maybe_upgrade() runs migration 2 and creates the restores table', array() !== $restore_columns && (string) get_option( 'ovb_db_version' ) === OVB_DB_VERSION && '2' === OVB_DB_VERSION, $wpdb->last_error );
+	ovb_check( 'restore schema: every planned column exists', array() === array_diff( array( 'id', 'backup_id', 'mode', 'status', 'step', 'state', 'snapshot_backup_id', 'error', 'started_at', 'finished_at', 'created_at', 'updated_at', 'created_by' ), $restore_columns ), 'have: ' . implode( ',', $restore_columns ) );
+	$restore_keys = array_column( (array) $wpdb->get_results( "SHOW INDEX FROM `{$ovb_rs_restores}`", ARRAY_A ), 'Key_name' );
+	ovb_check( 'restore schema: indexes on backup_id and status', in_array( 'backup_id', $restore_keys, true ) && in_array( 'status', $restore_keys, true ) && in_array( 'PRIMARY', $restore_keys, true ) );
+
+	$probe_id = $ovb_rs_rrepo->create( array( 'backup_id' => 2147000000, 'mode' => 'db', 'created_by' => 1 ) );
+	$ovb_rs_restore_ids[] = $probe_id;
+	update_option( 'ovb_db_version', '1' );
+	OpenVault\Backup\Core\Installer::maybe_upgrade();
+	ovb_check( 'restore schema: running migration 2 again is idempotent (dbDelta) and keeps the rows', null !== $ovb_rs_rrepo->find( $probe_id ) && (string) get_option( 'ovb_db_version' ) === OVB_DB_VERSION && '' === $wpdb->last_error, $wpdb->last_error );
+	$wpdb->query( "DROP TABLE IF EXISTS `{$ovb_rs_restores}`" );
+	update_option( 'ovb_db_version', '0' );
+	OpenVault\Backup\Core\Installer::maybe_upgrade();
+	ovb_check( 'restore schema: a fresh install (version 0) creates both migrations', (string) get_option( 'ovb_db_version' ) === OVB_DB_VERSION && array() !== (array) $wpdb->get_col( "SHOW COLUMNS FROM `{$ovb_rs_restores}`" ) );
+	$ovb_rs_restore_ids = array();
+
+	// 18b. The repository against the real database.
+	$hostile = "it's \"quoted\"; DROP TABLE x; -- %_ \xF0\x9F\x94\x92";
+	$rid     = $ovb_rs_rrepo->create( array( 'backup_id' => 2147000001, 'mode' => 'files', 'created_by' => 1 ) );
+	$ovb_rs_restore_ids[] = $rid;
+	$row     = $ovb_rs_rrepo->find( $rid );
+	ovb_check( 'restore repo: create returns typed defaults', is_array( $row ) && 'queued' === $row['status'] && 'files' === $row['mode'] && 'preflight' === $row['step'] && null === $row['snapshot_backup_id'] && null === $row['error'] && null === $row['started_at'] && null === $row['finished_at'] && 1 === $row['created_by'] );
+	ovb_check( 'restore repo: a queued row is found by find_incomplete() and find_active()', in_array( $rid, array_column( $ovb_rs_rrepo->find_incomplete(), 'id' ), true ) && in_array( $rid, array_column( $ovb_rs_rrepo->find_active(), 'id' ), true ) );
+	$ovb_rs_rrepo->update_status( $rid, 'running' );
+	$row = $ovb_rs_rrepo->find( $rid );
+	ovb_check( 'restore repo: running sets started_at once', 'running' === $row['status'] && null !== $row['started_at'] && null === $row['finished_at'] );
+	ovb_check( 'restore repo: a running restore is found by has_running()', $ovb_rs_rrepo->has_running() );
+	$state = JobState::new_state( 'fetch' )->with_meta( RestoreMeta::make( $rid, 'files', array( 'url_mismatch' ) ) )->with_cursor( array( 'i' => 2, 'off' => 123456, 'tries' => 0, 'n' => 3 ) );
+	ovb_check( 'restore repo: save_state stores the JSON and the step column', $ovb_rs_rrepo->save_state( $rid, $state ) && 'fetch' === $ovb_rs_rrepo->find( $rid )['step'] );
+	$loaded = $ovb_rs_rrepo->load_state( $rid );
+	ovb_check( 'restore repo: load_state round trip (cursor and meta)', null !== $loaded && 'fetch' === $loaded->get_step() && 123456 === $loaded->get_cursor()['off'] && array( 'url_mismatch' ) === RestoreMeta::ack( $loaded->get_meta() ) && RestoreMeta::restore_id( $loaded->get_meta() ) === $rid );
+	$ovb_rs_rrepo->update_status( $rid, 'verified' );
+	ovb_check( 'restore repo: verified is active (blocks another restore) but not running (does not block a backup)', ! $ovb_rs_rrepo->has_running() && in_array( $rid, array_column( $ovb_rs_rrepo->find_active(), 'id' ), true ) && ! in_array( $rid, array_column( $ovb_rs_rrepo->find_incomplete(), 'id' ), true ) );
+	$ovb_rs_rrepo->update_status( $rid, 'failed', array( 'error' => $hostile, 'snapshot_backup_id' => 77 ) );
+	$row = $ovb_rs_rrepo->find( $rid );
+	ovb_check( 'restore repo: failed sets finished_at, the hostile error text is stored verbatim (bound parameter) and the snapshot id', 'failed' === $row['status'] && null !== $row['finished_at'] && $hostile === $row['error'] && 77 === $row['snapshot_backup_id'], (string) $row['error'] );
+	ovb_check( 'restore repo: a finished row is in no active list', ! in_array( $rid, array_column( $ovb_rs_rrepo->find_active(), 'id' ), true ) );
+	ovb_check( 'restore repo: invalid input is refused', 'InvalidArgumentException' === ovb_throws( static function () use ( $ovb_rs_rrepo ) {
+		$ovb_rs_rrepo->create( array( 'backup_id' => 5, 'mode' => 'everything' ) );
+	} ) && 'InvalidArgumentException' === ovb_throws( static function () use ( $ovb_rs_rrepo, $rid ) {
+		$ovb_rs_rrepo->update_status( $rid, 'bogus' );
+	} ) );
+	ovb_check( 'restore repo: a missing row is reported', false === $ovb_rs_rrepo->update_status( 2147000099, 'running' ) && null === $ovb_rs_rrepo->find( 2147000099 ) && null === $ovb_rs_rrepo->load_state( 2147000099 ) );
+
+	// 18c. A real backup to a Local destination folder and to the real S3 server.
+	$format = ( new CapabilityDetector() )->default_format();
+	ovb_check( 'restore: a backup format is available', null !== $format );
+	ovb_check( 'restore: the matrix S3 server is configured', '' !== $ovb_s3_endpoint && '' !== $ovb_s3_access && '' !== $ovb_s3_secret );
+	if ( null === $format || '' === $ovb_s3_endpoint ) {
+		throw new RuntimeException( 'cannot take a backup here' );
+	}
+
+	$frepo = new BackupFilesRepository();
+	$ubk   = new BackupsRepository();
+	$created = ovb_s3_bucket_call( 'PUT', $ovb_s3_endpoint, $ovb_s3_access, $ovb_s3_secret, $ovb_rs_bucket );
+	ovb_check( 'restore: the harness created a bucket', 200 === $created, (string) $created );
+	$d_loc = $drepo->create( 'local', 'Matrix restore local', array( 'path' => $ovb_rs_dest_path ), array() );
+	$d_s3  = $drepo->create(
+		's3',
+		'Matrix restore s3',
+		array(
+			'preset'                 => 'custom',
+			'endpoint'               => $ovb_s3_endpoint,
+			'addressing'             => 'path',
+			'allow_insecure_http'    => true,
+			'allow_private_endpoint' => true,
+			'bucket'                 => $ovb_rs_bucket,
+			'prefix'                 => 'rs-prefix',
+			'part_size_mb'           => 5,
+		),
+		array( 'access_key' => $ovb_s3_access, 'secret_key' => $ovb_s3_secret )
+	);
+	$ovb_rs_dest_ids = array( $d_loc, $d_s3 );
+	ovb_check( 'restore: destinations created (the local one has the lower id)', min( $ovb_rs_dest_ids ) > 0 && $d_loc < $d_s3 );
+
+	$settings                      = is_array( $ovb_rs_settings ) ? $ovb_rs_settings : array();
+	$settings['part_size_mb']      = 8;
+	$settings['min_free_space_mb'] = 0;
+	update_option( 'ovb_settings', $settings );
+	ovb_arc_mkdir( $ovb_rs_fixture );
+	foreach ( array( 'a', 'b', 'c' ) as $letter ) {
+		ovb_arc_random_file( $ovb_rs_fixture . '/' . $letter . '.bin', 6 );
+	}
+
+	$brunner = new JobRunner(
+		null,
+		null,
+		static function () {
+			return new Budget( 600, PHP_INT_MAX );
+		}
+	);
+	$ovb_rs_job = $ubk->create( array( 'note' => $ovb_marker . ' restore source', 'contents' => array( 'db' => true, 'uploads' => true ), 'format' => $format ) );
+	$brunner->start( $ovb_rs_job, array( 'destinations' => array( $d_loc, $d_s3 ) ) );
+	for ( $i = 0; $i < 300; $i++ ) {
+		ovb_clear_pending( $ovb_rs_job );
+		$out = $brunner->run( $ovb_rs_job );
+		if ( ! in_array( $out, array( 'continued', 'waiting' ), true ) ) {
+			break;
+		}
+	}
+	$backup        = $ubk->find( $ovb_rs_job );
+	$local_rows    = array();
+	foreach ( $frepo->for_backup_and_destination( $ovb_rs_job, 0 ) as $r ) {
+		$local_rows[ $r['file_name'] ] = $r;
+	}
+	$done_by_dest  = array();
+	foreach ( $frepo->for_backup( $ovb_rs_job ) as $r ) {
+		$done_by_dest[ $r['destination_id'] ][] = $r['upload_status'];
+	}
+	ovb_check( 'restore: the source backup is complete with copies in the local folder, the destination folder and S3', 'complete' === $backup['status'] && count( $local_rows ) >= 4 && isset( $done_by_dest[ $d_loc ], $done_by_dest[ $d_s3 ] ) && array( 'done' ) === array_values( array_unique( $done_by_dest[ $d_loc ] ) ) && array( 'done' ) === array_values( array_unique( $done_by_dest[ $d_s3 ] ) ), $backup['status'] . ' ' . wp_json_encode( $done_by_dest ) );
+
+	$ovb_rs_folder  = Paths::build_backup_folder_name( $backup['created_at'], $backup['uuid'] );
+	$ovb_rs_primary = Paths::backups_dir() . '/' . $ovb_rs_folder;
+	$host           = RemotePath::site_host( site_url() );
+	$dest_copy      = $ovb_rs_dest_path . '/' . RemotePath::folder( $host, $ovb_rs_folder );
+	$ovb_rs_s3      = ( new DestinationRegistry() )->create( $drepo->find( $d_s3 ) );
+	$parts          = array_filter( $local_rows, static function ( $r ) {
+		return 'manifest.json' !== $r['file_name'];
+	} );
+	usort( $parts, static function ( $a, $b ) {
+		return $b['size'] - $a['size'];
+	} );
+	$big_part       = $parts[0];
+	$s3_ref         = RemotePath::file( $host, $ovb_rs_folder, $big_part['file_name'] );
+
+	// The restore engine under test, with a tiny budget per run.
+	$rs_clock   = 0.0;
+	$rs_factory = static function () use ( &$rs_clock ) {
+		return new Budget(
+			3,
+			PHP_INT_MAX,
+			static function () use ( &$rs_clock ) {
+				$rs_clock += 1.0;
+				return $rs_clock;
+			}
+		);
+	};
+	$rrunner = new RestoreRunner( null, null, null, $rs_factory );
+	$rmgr    = new RestoreManager( null, null, null, new OvbLenientPreflight(), $rrunner );
+	$ovb_rs_lenient_filter = static function ( $steps ) {
+		$steps['preflight'] = new RestorePreflightStep( null, null, new OvbLenientPreflight() );
+		return $steps;
+	};
+	add_filter( 'ovb_restore_steps', $ovb_rs_lenient_filter );
+	$rs_start = static function ( $mode = 'full', array $options = array(), $backup_id = null ) use ( $rmgr, &$ovb_rs_job, &$ovb_rs_restore_ids ) {
+		$result = $rmgr->start( null === $backup_id ? $ovb_rs_job : $backup_id, $mode, array_merge( array( 'user_id' => 1 ), $options ) );
+		if ( $result['restore_id'] > 0 ) {
+			$ovb_rs_restore_ids[] = $result['restore_id'];
+		}
+		return $result;
+	};
+	$rs_codes = static function ( array $list ) {
+		return array_column( $list, 'code' );
+	};
+	$rs_count = static function () use ( $wpdb, $ovb_rs_restores ) {
+		return (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$ovb_rs_restores}`" );
+	};
+	$rs_pending = static function ( $id ) {
+		return ovb_pending_count( RestoreRunner::ACTION, array( (int) $id ) );
+	};
+	$rs_verify_files = static function ( $id, $names = null ) use ( $local_rows ) {
+		$work = ovb_rs_work( $id );
+		$ok   = true;
+		foreach ( $local_rows as $name => $r ) {
+			if ( null !== $names && ! in_array( $name, $names, true ) ) {
+				continue;
+			}
+			$path = $work . '/' . $name;
+			if ( ! is_file( $path ) || filesize( $path ) !== (int) $r['size'] || hash_file( 'sha256', $path ) !== $r['checksum_sha256'] ) {
+				$ok = false;
+			}
+		}
+		return $ok && array() === ( glob( $work . '/*.part' ) ?: array() );
+	};
+
+	ovb_check( 'restore: the runner is hooked on ovb_run_restore and the stalled-job scan (the same 5-minute action as the backup runner)', false !== has_action( RestoreRunner::ACTION ) && isset( $GLOBALS['wp_filter'][ JobRunner::RECOVER_ACTION ] ) && count( $GLOBALS['wp_filter'][ JobRunner::RECOVER_ACTION ]->callbacks[10] ) >= 2 );
+
+	$ovb_rs_decoys = array( Paths::tmp_dir() . '/ovb-rs-decoy', Paths::tmp_dir() . '/restore-keep-me' );
+	foreach ( $ovb_rs_decoys as $decoy ) {
+		ovb_arc_put( $decoy . '/keep.txt', 'keep' );
+	}
+	$tmp_guard = array_map( 'file_exists', array( Paths::tmp_dir() . '/index.php', Paths::tmp_dir() . '/.htaccess' ) );
+
+	// 18d. Restore from the LOCAL copy: read in place, nothing is copied.
+	$a = $rs_start( 'full' );
+	ovb_check( 'restore local: start() checks everything and returns the new job id', true === $a['ok'] && $a['restore_id'] > 0 && array() === $a['errors'] && 0 === $a['plan']['chosen_source'], wp_json_encode( $a ) );
+	$a_id  = $a['restore_id'];
+	$a_row = $ovb_rs_rrepo->find( $a_id );
+	ovb_check( 'restore local: the job is queued as running with a state, an action is pending and the creator is recorded', 'running' === $a_row['status'] && 1 === $a_row['created_by'] && $a_row['backup_id'] === $ovb_rs_job && 1 === $rs_pending( $a_id ) && null !== $ovb_rs_rrepo->load_state( $a_id ) );
+	$a_out = ovb_rs_drive( $rrunner, $a_id );
+	$a_row = $ovb_rs_rrepo->find( $a_id );
+	$a_state = $ovb_rs_rrepo->load_state( $a_id );
+	$a_meta  = $a_state->get_meta();
+	ovb_check( sprintf( 'restore local: fetch + verify finish over %d runs and the job reaches "verified" (waiting for confirmation)', count( $a_out ) ), 'verified' === end( $a_out ) && 'verified' === $a_row['status'] && 'snapshot' === $a_row['step'] && 'snapshot' === $a_state->get_step() && count( $a_out ) > 1, wp_json_encode( array_count_values( $a_out ) ) . ' ' . $a_row['status'] . ' ' . (string) $a_row['error'] );
+	ovb_check( 'restore local: the verified meta names the local source and counts every file', isset( $a_meta['verified'] ) && 0 === $a_meta['verified']['source'] && count( $local_rows ) === $a_meta['verified']['files'] );
+	$a_work = ovb_rs_work( $a_id );
+	ovb_check( 'restore local: nothing was copied into the work folder (copy-free)', is_dir( $a_work ) && array() === array_diff( scandir( $a_work ), array( '.', '..', 'index.php', '.htaccess', 'web.config' ) ) );
+	ovb_check( 'restore local: the lock is released, no action is queued and the job holds no lock while it waits', null === ovb_rs_lock_value() && 0 === $rs_pending( $a_id ) );
+	ovb_check( 'restore local: the state stays tiny', strlen( $a_state->to_json() ) < 2000, (string) strlen( $a_state->to_json() ) );
+	ovb_check( 'restore local: running a verified job again changes nothing (it parks again)', 'verified' === $rrunner->run( $a_id ) && 'verified' === $ovb_rs_rrepo->find( $a_id )['status'] && 0 === $rs_pending( $a_id ) );
+	ovb_check( 'restore local: nothing was applied (the apply steps are not implemented: confirmation is never given in 5a)', ! RestoreMeta::confirmed( $a_meta ) );
+
+	// 18e. Concurrency while this restore waits as "verified".
+	$second = $rs_start( 'full' );
+	ovb_check( 'restore concurrency: a verified restore still blocks another restore, with a clear message', false === $second['ok'] && 0 === $second['restore_id'] && array( 'restore_running' ) === $rs_codes( $second['errors'] ) && false !== stripos( $second['errors'][0]['message'], 'another restore' ), wp_json_encode( $second['errors'] ) );
+	ovb_check( 'restore concurrency: a verified restore does not block starting a backup (only queued or running ones do)', ! $ovb_rs_rrepo->has_running() );
+	ovb_check( 'restore concurrency: nothing was created by the refused start', 'restore_running' === $second['errors'][0]['code'] && 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$ovb_rs_restores}` WHERE status IN ('queued','running') AND backup_id = {$ovb_rs_job}" ) );
+	ovb_check( 'restore local: cancel returns true', $rmgr->cancel( $a_id ) );
+	$a_row = $ovb_rs_rrepo->find( $a_id );
+	ovb_check( 'restore cancel: status cancelled with the reason, finished_at set, state terminal', 'cancelled' === $a_row['status'] && 'Cancelled by user' === $a_row['error'] && null !== $a_row['finished_at'] && $ovb_rs_rrepo->load_state( $a_id )->is_terminal() );
+	ovb_check( 'restore cancel: the work folder is gone, tmp and everything else in it is untouched (decoys and guard files)', ! file_exists( $a_work ) && file_exists( $ovb_rs_decoys[0] . '/keep.txt' ) && file_exists( $ovb_rs_decoys[1] . '/keep.txt' ) && array( true, true ) === $tmp_guard && file_exists( Paths::tmp_dir() . '/index.php' ) );
+	ovb_check( 'restore cancel: cancelling again, or a missing job, returns false', false === $rmgr->cancel( $a_id ) && false === $rmgr->cancel( 2147000098 ) );
+	ovb_check( 'restore cancel: the backup and its copies are untouched', is_file( $ovb_rs_primary . '/manifest.json' ) && is_file( $dest_copy . '/manifest.json' ) );
+
+	// 18f. Restore from the destination folder only (the local copy is hidden), with a killed run during the download.
+	rename( $ovb_rs_primary, $ovb_rs_primary . '-hidden' );
+	$b = $rs_start( 'full' );
+	ovb_check( 'restore remote: with the local copy gone the plan picks the first destination (the folder)', true === $b['ok'] && $d_loc === $b['plan']['chosen_source'] && 3 === count( $b['plan']['sources'] ) && $b['plan']['download_bytes'] > 17 * 1048576, wp_json_encode( $b['plan'] ) . wp_json_encode( $b['errors'] ) );
+	$b_id    = $b['restore_id'];
+	$b_obs   = array( 'garbage' => 0, 'replayed' => false, 'older' => null, 'seen' => array(), 'max_cursor' => 0 );
+	$b_each  = static function ( $out ) use ( &$b_obs, $ovb_rs_rrepo, $b_id ) {
+		$state = $ovb_rs_rrepo->load_state( $b_id );
+		if ( null === $state || 'fetch' !== $state->get_step() ) {
+			return;
+		}
+		$cursor = $state->get_cursor();
+		if ( ! isset( $cursor['off'], $cursor['i'] ) ) {
+			return;
+		}
+		$b_obs['max_cursor']            = max( $b_obs['max_cursor'], strlen( wp_json_encode( $cursor ) ) );
+		$b_obs['seen'][ $cursor['i'] ][] = $cursor['off'];
+		$parts_on_disk = glob( ovb_rs_work( $b_id ) . '/*.part' ) ?: array();
+		if ( 0 === $b_obs['garbage'] && $cursor['off'] > 0 && array() !== $parts_on_disk ) {
+			// A killed run: bytes after the saved offset.
+			file_put_contents( $parts_on_disk[0], 'GARBAGE' . random_bytes( 4000 ), FILE_APPEND );
+			$b_obs['garbage'] = 1;
+			$b_obs['older']   = array( $state, $cursor['i'], $cursor['off'] );
+		} elseif ( ! $b_obs['replayed'] && null !== $b_obs['older'] && $b_obs['older'][1] === $cursor['i'] && $cursor['off'] >= $b_obs['older'][2] + 2 * 1048576 ) {
+			// Runs went on and their cursors were lost: an older cursor comes back over a longer partial file.
+			$ovb_rs_rrepo->save_state( $b_id, $b_obs['older'][0] );
+			$b_obs['seen'][ $cursor['i'] ][] = null;
+			$b_obs['replayed']               = true;
+		}
+	};
+	$b_out   = ovb_rs_drive( $rrunner, $b_id, $b_each );
+	$b_row   = $ovb_rs_rrepo->find( $b_id );
+	$b_meta  = $ovb_rs_rrepo->load_state( $b_id )->get_meta();
+	ovb_check( sprintf( 'restore remote (folder): fetch and verify run over %d runs with a tiny budget and the job reaches "verified"', count( $b_out ) ), 'verified' === $b_row['status'] && count( $b_out ) >= 8, wp_json_encode( array_count_values( $b_out ) ) . ' ' . (string) $b_row['error'] );
+	ovb_check( 'restore remote (folder): the files in the work folder match the sha256 and size of the backup rows, manifest included, no .part left', $rs_verify_files( $b_id ) );
+	ovb_check( 'restore remote (folder): verified from the destination copy', isset( $b_meta['verified'] ) && $d_loc === $b_meta['verified']['source'] && array() === RestoreMeta::tried( $b_meta ) );
+	$monotonic = true;
+	foreach ( $b_obs['seen'] as $offsets ) {
+		$prev = -1;
+		foreach ( $offsets as $offset ) {
+			if ( null === $offset ) {
+				$prev = -1;
+				continue;
+			}
+			if ( $offset < $prev ) {
+				$monotonic = false;
+			}
+			$prev = $offset;
+		}
+	}
+	ovb_check( 'restore remote (folder): killed-run simulations ran (garbage after the saved offset, an older cursor replayed) and the files are still exact', 1 === $b_obs['garbage'] && $b_obs['replayed'], wp_json_encode( array( $b_obs['garbage'], $b_obs['replayed'] ) ) );
+	ovb_check( 'restore remote (folder): saved offsets only grow and the cursor stays tiny (' . $b_obs['max_cursor'] . ' bytes)', $monotonic && $b_obs['max_cursor'] < 80, wp_json_encode( $b_obs['seen'] ) );
+	ovb_check( 'restore remote (folder): the lock is released and nothing is queued while the job waits', null === ovb_rs_lock_value() && 0 === $rs_pending( $b_id ) );
+	$work_b = ovb_rs_work( $b_id );
+	$state_json = (string) $wpdb->get_var( $wpdb->prepare( "SELECT state FROM `{$ovb_rs_restores}` WHERE id = %d", $b_id ) );
+	$logs_blob  = implode( "\n", (array) $wpdb->get_col( $wpdb->prepare( "SELECT CONCAT(message, ' ', COALESCE(context, '')) FROM {$ovb_prefix}logs WHERE backup_id = %d", $ovb_rs_job ) ) );
+	ovb_check( 'restore: no S3 secret or key in the restore state, the restore row or the logs', false === strpos( $state_json . $logs_blob . wp_json_encode( $b_row ), $ovb_s3_secret ) && false === strpos( $state_json . $logs_blob . wp_json_encode( $b_row ), $ovb_s3_access ) );
+	ovb_check( 'restore remote (folder): the cancel removes only tmp/restore-<id>', $rmgr->cancel( $b_id ) && ! file_exists( $work_b ) && file_exists( $ovb_rs_decoys[1] . '/keep.txt' ) && file_exists( $ovb_rs_decoys[0] . '/keep.txt' ) );
+
+	// 18g. Restore from S3 only: the destination folder's copy is marked failed, so the plan skips it.
+	$loc_manifest_row = null;
+	foreach ( $frepo->for_backup_and_destination( $ovb_rs_job, $d_loc ) as $r ) {
+		if ( 'manifest.json' === $r['file_name'] ) {
+			$loc_manifest_row = $r;
+		}
+	}
+	$frepo->update_upload( $loc_manifest_row['id'], 'failed' );
+	$c = $rs_start( 'full' );
+	ovb_check( 'restore remote (S3): a destination with an unfinished manifest is ignored and S3 is chosen', true === $c['ok'] && $d_s3 === $c['plan']['chosen_source'] && false === $c['plan']['sources'][1]['complete'] && 'manifest_missing' === $c['plan']['sources'][1]['reason'], wp_json_encode( $c['plan'] ) . wp_json_encode( $c['errors'] ) );
+	$c_id  = $c['restore_id'];
+	$c_out = ovb_rs_drive( $rrunner, $c_id );
+	$c_row = $ovb_rs_rrepo->find( $c_id );
+	$c_meta = $ovb_rs_rrepo->load_state( $c_id )->get_meta();
+	ovb_check( sprintf( 'restore remote (S3): fetch and verify run over %d runs and the job reaches "verified"', count( $c_out ) ), 'verified' === $c_row['status'] && count( $c_out ) >= 3, wp_json_encode( array_count_values( $c_out ) ) . ' ' . (string) $c_row['error'] );
+	ovb_check( 'restore remote (S3): the downloaded files match the manifest rows byte for byte (ranged GETs), no .part left', $rs_verify_files( $c_id ) );
+	ovb_check( 'restore remote (S3): verified from S3, nothing was tried before', isset( $c_meta['verified'] ) && $d_s3 === $c_meta['verified']['source'] && array() === RestoreMeta::tried( $c_meta ) );
+	ovb_check( 'restore remote (S3): the lock is released', null === ovb_rs_lock_value() );
+	$rmgr->cancel( $c_id );
+	ovb_check( 'restore remote (S3): the work folder is cleaned on cancel', ! file_exists( ovb_rs_work( $c_id ) ) );
+	$frepo->update_upload( $loc_manifest_row['id'], 'done' );
+
+	// 18h. A destination that lost its files: the permanent download error falls back to the next source, once.
+	rename( $ovb_rs_dest_path . '/OpenVault-Backups', $ovb_rs_dest_path . '/OpenVault-Backups-hidden' );
+	$d = $rs_start( 'full' );
+	ovb_check( 'restore fallback: the plan still trusts the rows and chooses the destination folder first', true === $d['ok'] && $d_loc === $d['plan']['chosen_source'] && array( $d_s3 ) === $d['plan']['fallbacks'], wp_json_encode( $d['plan'] ) . wp_json_encode( $d['errors'] ) );
+	$d_id  = $d['restore_id'];
+	$d_out = ovb_rs_drive( $rrunner, $d_id );
+	$d_row = $ovb_rs_rrepo->find( $d_id );
+	$d_meta = $ovb_rs_rrepo->load_state( $d_id )->get_meta();
+	ovb_check( 'restore fallback: the job falls back to S3 automatically and reaches "verified"', 'verified' === $d_row['status'] && isset( $d_meta['verified'] ) && $d_s3 === $d_meta['verified']['source'] && array( $d_loc ) === RestoreMeta::tried( $d_meta ), wp_json_encode( array_count_values( $d_out ) ) . ' ' . (string) $d_row['error'] . wp_json_encode( $d_meta ) );
+	ovb_check( 'restore fallback: the files in the work folder come from S3 and are exact', $rs_verify_files( $d_id ) );
+	$fallback_logs = (string) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$ovb_prefix}logs WHERE backup_id = %d AND level = 'warning' AND message LIKE %s", $ovb_rs_job, '%trying the next copy%' ) );
+	ovb_check( 'restore fallback: the switch is logged as a warning', (int) $fallback_logs >= 1 );
+	$rmgr->cancel( $d_id );
+	rename( $ovb_rs_dest_path . '/OpenVault-Backups-hidden', $ovb_rs_dest_path . '/OpenVault-Backups' );
+
+	// 18i. Every preflight refusal against the real site (a manifest rewritten in the local copy, then put back).
+	rename( $ovb_rs_primary . '-hidden', $ovb_rs_primary );
+	$manifest_path = $ovb_rs_primary . '/manifest.json';
+	$manifest_orig = file_get_contents( $manifest_path );
+	$before_count  = $rs_count();
+	$refusals      = array(
+		'a newer plugin version'      => array( 'newer_version', 'full', static function ( $m ) {
+			$m['plugin_version'] = '99.0.0';
+			return $m;
+		} ),
+		'a newer manifest schema'     => array( 'newer_version', 'full', static function ( $m ) {
+			$m['schema'] = 2;
+			$m['brand_new_field'] = true;
+			return $m;
+		} ),
+		'a different table prefix'    => array( 'prefix_mismatch', 'full', static function ( $m ) {
+			$m['table_prefix'] = 'other_';
+			return $m;
+		} ),
+		'the encrypted flag'          => array( 'encrypted', 'full', static function ( $m ) {
+			$m['encrypted'] = true;
+			return $m;
+		} ),
+		'mode db without a db part'   => array( 'no_parts', 'db', static function ( $m ) {
+			$m['parts'] = array_values( array_filter( $m['parts'], static function ( $p ) {
+				return 'db' !== $p['kind'];
+			} ) );
+			return $m;
+		} ),
+		'mode files without files'    => array( 'no_parts', 'files', static function ( $m ) {
+			$m['parts'] = array_values( array_filter( $m['parts'], static function ( $p ) {
+				return 'db' === $p['kind'];
+			} ) );
+			return $m;
+		} ),
+	);
+	foreach ( $refusals as $label => $case ) {
+		ovb_rs_edit_manifest( $manifest_path, $case[2] );
+		$result = $rs_start( $case[1] );
+		file_put_contents( $manifest_path, $manifest_orig );
+		ovb_check( "restore preflight: $label is refused with code {$case[0]} and an actionable message", false === $result['ok'] && 0 === $result['restore_id'] && in_array( $case[0], $rs_codes( $result['errors'] ), true ) && '' !== $result['errors'][0]['message'], wp_json_encode( $result['errors'] ) );
+	}
+	$prefix_msg = '';
+	ovb_rs_edit_manifest( $manifest_path, static function ( $m ) {
+		$m['table_prefix'] = 'other_';
+		return $m;
+	} );
+	$result = $rs_start( 'full' );
+	foreach ( $result['errors'] as $error ) {
+		if ( 'prefix_mismatch' === $error['code'] ) {
+			$prefix_msg = $error['message'];
+		}
+	}
+	file_put_contents( $manifest_path, $manifest_orig );
+	ovb_check( 'restore preflight: the prefix message names both prefixes and says it is not supported yet', false !== strpos( $prefix_msg, '"other_"' ) && false !== strpos( $prefix_msg, '"' . $wpdb->base_prefix . '"' ) && false !== strpos( $prefix_msg, 'not supported yet' ), $prefix_msg );
+	ovb_check( 'restore preflight: the refusals created no restore rows', $rs_count() === $before_count );
+
+	// A files-only restore ignores the table prefix (no database import).
+	ovb_rs_edit_manifest( $manifest_path, static function ( $m ) {
+		$m['table_prefix'] = 'other_';
+		return $m;
+	} );
+	$files_only = $rs_start( 'files' );
+	file_put_contents( $manifest_path, $manifest_orig );
+	ovb_check( 'restore preflight: a files-only restore is not blocked by a different table prefix', true === $files_only['ok'] && $files_only['restore_id'] > 0, wp_json_encode( $files_only['errors'] ) );
+	if ( $files_only['restore_id'] > 0 ) {
+		$rmgr->cancel( $files_only['restore_id'] );
+	}
+
+	// The site address differs: blocked until acknowledged.
+	ovb_rs_edit_manifest( $manifest_path, static function ( $m ) {
+		$m['site_url'] = 'https://old.example.org';
+		return $m;
+	} );
+	$no_ack = $rs_start( 'full' );
+	$acked  = $rs_start( 'full', array( 'acknowledge_url_mismatch' => true ) );
+	file_put_contents( $manifest_path, $manifest_orig );
+	ovb_check( 'restore preflight: a different site address needs an acknowledgement (nothing started, the old address is named)', false === $no_ack['ok'] && 0 === $no_ack['restore_id'] && array() === $no_ack['errors'] && array( 'url_mismatch' ) === $rs_codes( $no_ack['requires_ack'] ) && false !== strpos( $no_ack['requires_ack'][0]['message'], 'https://old.example.org' ), wp_json_encode( $no_ack ) );
+	ovb_check( 'restore preflight: with acknowledge_url_mismatch the restore starts and the acknowledgement is stored in the job meta', true === $acked['ok'] && $acked['restore_id'] > 0 && array( 'url_mismatch' ) === RestoreMeta::ack( $ovb_rs_rrepo->load_state( $acked['restore_id'] )->get_meta() ), wp_json_encode( $acked['errors'] ) );
+	if ( $acked['restore_id'] > 0 ) {
+		$rmgr->cancel( $acked['restore_id'] );
+	}
+
+	// Mode, backup state, unknown backup.
+	$bad_mode = $rs_start( 'everything' );
+	ovb_check( 'restore preflight: an unknown mode is refused', false === $bad_mode['ok'] && array( 'mode' ) === $rs_codes( $bad_mode['errors'] ) );
+	$unfinished = $ubk->create( array( 'note' => $ovb_marker . ' restore unfinished', 'format' => $format, 'contents' => array( 'db' => true ) ) );
+	$ubk->update_status( $unfinished, 'running' );
+	$not_done = $rs_start( 'full', array(), $unfinished );
+	ovb_check( 'restore preflight: a backup that has not finished cannot be restored', false === $not_done['ok'] && array( 'backup_not_finished' ) === $rs_codes( $not_done['errors'] ) );
+	$running_blocks = $rs_start( 'full' );
+	ovb_check( 'restore concurrency: a running backup blocks the start of a restore', false === $running_blocks['ok'] && in_array( 'backup_running', $rs_codes( $running_blocks['errors'] ), true ), wp_json_encode( $running_blocks['errors'] ) );
+	$ubk->delete( $unfinished, true );
+	$missing = $rs_start( 'full', array(), 2147000097 );
+	ovb_check( 'restore preflight: an unknown backup is refused', false === $missing['ok'] && array( 'backup_missing' ) === $rs_codes( $missing['errors'] ) );
+
+	// Destination that needs a reconnect, while a part of the local copy is missing and the folder copy is unfinished.
+	$moved_part = $ovb_rs_primary . '/' . $big_part['file_name'];
+	rename( $moved_part, $moved_part . '.moved' );
+	$frepo->update_upload( $loc_manifest_row['id'], 'failed' );
+	$wpdb->update( $ovb_prefix . 'destinations', array( 'status' => 'needs_reconnect' ), array( 'id' => $d_s3 ) );
+	$recon = $rs_start( 'full' );
+	$wpdb->update( $ovb_prefix . 'destinations', array( 'status' => 'connected' ), array( 'id' => $d_s3 ) );
+	$frepo->update_upload( $loc_manifest_row['id'], 'done' );
+	rename( $moved_part . '.moved', $moved_part );
+	ovb_check( 'restore preflight: a source destination that needs a reconnect is refused with the reconnect message', false === $recon['ok'] && in_array( 'needs_reconnect', $rs_codes( $recon['errors'] ), true ) && false !== stripos( wp_json_encode( $recon['errors'] ), 'reconnect' ), wp_json_encode( $recon ) );
+	ovb_check( 'restore preflight: an incomplete local copy is described in the plan', 'part_missing' === $recon['plan']['sources'][0]['reason'] );
+
+	// Disk space with the real free space of the volume.
+	$free = function_exists( 'disk_free_space' ) ? @disk_free_space( Paths::local_dir() ) : false;
+	$settings['min_free_space_mb'] = 999999999;
+	update_option( 'ovb_settings', $settings );
+	$disk = $rs_start( 'full' );
+	$settings['min_free_space_mb'] = 0;
+	update_option( 'ovb_settings', $settings );
+	if ( false !== $free ) {
+		ovb_check( 'restore preflight: not enough free disk space is refused with "X free, Y needed"', false === $disk['ok'] && in_array( 'disk_space', $rs_codes( $disk['errors'] ), true ) && 1 === preg_match( '/Not enough free disk space: [0-9.]+ [KMGT]?B free, [0-9.]+ [KMGT]?B needed\./', $disk['errors'][0]['message'] ), wp_json_encode( $disk['errors'] ) );
+	} else {
+		ovb_check( 'restore preflight: when the free space cannot be read the check warns and continues', in_array( 'disk_unknown', $rs_codes( $disk['warnings'] ), true ) && true === $disk['ok'] );
+		if ( $disk['restore_id'] > 0 ) {
+			$rmgr->cancel( $disk['restore_id'] );
+		}
+	}
+	ovb_check( 'restore preflight: after all refusals the manifest is back to its original bytes', file_get_contents( $manifest_path ) === $manifest_orig );
+
+	// 18j. Concurrency: a queued or running restore blocks backups; the restore lock serialises slices.
+	$rs_e = $rs_start( 'full' );
+	$e_id = $rs_e['restore_id'];
+	ovb_check( 'restore concurrency: a restore can start when nothing else runs', true === $rs_e['ok'] && $e_id > 0, wp_json_encode( $rs_e['errors'] ) );
+	$again = $rs_start( 'full' );
+	ovb_check( 'restore concurrency: a running restore blocks a second restore', false === $again['ok'] && array( 'restore_running' ) === $rs_codes( $again['errors'] ) );
+	$rest_request = new WP_REST_Request( 'POST', '/ovb/v1/backups' );
+	$rest_request->set_header( 'content-type', 'application/json' );
+	$rest_request->set_body( wp_json_encode( array( 'contents' => array( 'db' => true ) ) ) );
+	$backups_before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}backups" );
+	$rest_response  = rest_do_request( $rest_request );
+	$rest_data      = $rest_response->get_data();
+	ovb_check( 'restore concurrency: starting a backup while a restore runs is refused with 409 and creates nothing', 409 === $rest_response->get_status() && 'ovb_restore_running' === ( isset( $rest_data['code'] ) ? $rest_data['code'] : '' ) && (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}backups" ) === $backups_before, $rest_response->get_status() . ' ' . wp_json_encode( $rest_data ) );
+	$lock = new JobLock( 'restore' );
+	ovb_check( 'restore concurrency: the global restore lock is a real options row named ovb_lock_restore', $lock->acquire( 120 ) && null !== ovb_rs_lock_value() );
+	as_unschedule_all_actions( RestoreRunner::ACTION, array( $e_id ), RestoreRunner::GROUP );
+	ovb_check( 'restore concurrency: while the lock is held, a run does nothing (busy)', RestoreRunner::OUTCOME_BUSY === $rrunner->run( $e_id ) && 'running' === $ovb_rs_rrepo->find( $e_id )['status'] );
+	$lock->release();
+	ovb_check( 'restore concurrency: the lock is released afterwards and a run proceeds', null === ovb_rs_lock_value() && RestoreRunner::OUTCOME_BUSY !== $rrunner->run( $e_id ) && null === ovb_rs_lock_value() );
+	$rmgr->cancel( $e_id );
+
+	// 18k. Cancel in the middle of a download.
+	rename( $ovb_rs_primary, $ovb_rs_primary . '-hidden' );
+	$h = $rs_start( 'full' );
+	$h_id = $h['restore_id'];
+	ovb_check( 'restore cancel: a second restore can be started after the first was cancelled', true === $h['ok'] && $h_id > 0 && $d_loc === $h['plan']['chosen_source'], wp_json_encode( $h['errors'] ) );
+	for ( $i = 0; $i < 3; $i++ ) {
+		as_unschedule_all_actions( RestoreRunner::ACTION, array( $h_id ), RestoreRunner::GROUP );
+		$rrunner->run( $h_id );
+	}
+	$h_state = $ovb_rs_rrepo->load_state( $h_id );
+	ovb_check( 'restore cancel: after three runs the job is still downloading and a partial file is on disk', 'fetch' === $h_state->get_step() && array() !== array_diff( scandir( ovb_rs_work( $h_id ) ), array( '.', '..', 'index.php', '.htaccess', 'web.config' ) ) && 'running' === $ovb_rs_rrepo->find( $h_id )['status'] );
+	ovb_check( 'restore cancel: cancelling mid-download succeeds', $rmgr->cancel( $h_id ) );
+	ovb_check( 'restore cancel: work folder gone, no action queued, decoys and the destination copy untouched', ! file_exists( ovb_rs_work( $h_id ) ) && 0 === $rs_pending( $h_id ) && file_exists( $ovb_rs_decoys[0] . '/keep.txt' ) && is_file( $dest_copy . '/manifest.json' ) );
+	ovb_check( 'restore cancel: a run of a cancelled job does nothing', RestoreRunner::OUTCOME_FINISHED === $rrunner->run( $h_id ) );
+	rename( $ovb_rs_primary . '-hidden', $ovb_rs_primary );
+
+	// 18l. Stalled-job recovery.
+	$s_id = $ovb_rs_rrepo->create( array( 'backup_id' => $ovb_rs_job, 'mode' => 'full' ) );
+	$ovb_rs_restore_ids[] = $s_id;
+	$rrunner->start( $s_id, RestoreMeta::make( $s_id, 'full' ) );
+	ovb_clear_pending( $s_id );
+	as_unschedule_all_actions( RestoreRunner::ACTION, array( $s_id ), RestoreRunner::GROUP );
+	$ovb_rs_rrepo->save_state( $s_id, JobState::new_state( 'fetch', time() - 2000 )->with_meta( RestoreMeta::make( $s_id, 'full' ) ) );
+	$v_id = $ovb_rs_rrepo->create( array( 'backup_id' => $ovb_rs_job, 'mode' => 'full', 'status' => 'verified', 'step' => 'snapshot' ) );
+	$ovb_rs_restore_ids[] = $v_id;
+	$ovb_rs_rrepo->save_state( $v_id, JobState::new_state( 'snapshot', time() - 5000 )->with_meta( RestoreMeta::make( $v_id, 'full' ) ) );
+	$recovered = $rrunner->recover_stalled( time(), 600 );
+	ovb_check( 'restore recovery: a running job without a heartbeat is re-enqueued with one more attempt', in_array( $s_id, $recovered['requeued'], true ) && 1 === $rs_pending( $s_id ) && 1 === $ovb_rs_rrepo->load_state( $s_id )->get_attempts(), wp_json_encode( $recovered ) );
+	ovb_check( 'restore recovery: a verified job (waiting for the user) is left alone however old it is', ! in_array( $v_id, $recovered['requeued'], true ) && ! in_array( $v_id, $recovered['failed'], true ) && 'verified' === $ovb_rs_rrepo->find( $v_id )['status'] );
+	as_unschedule_all_actions( RestoreRunner::ACTION, array( $s_id ), RestoreRunner::GROUP );
+	$tired = JobState::new_state( 'fetch', time() - 2000 )->with_meta( RestoreMeta::make( $s_id, 'full' ) );
+	for ( $k = 0; $k < RestoreRunner::MAX_ATTEMPTS; $k++ ) {
+		$tired = $tired->increment_attempts( time() - 2000 );
+	}
+	$ovb_rs_rrepo->save_state( $s_id, $tired );
+	$recovered = $rrunner->recover_stalled( time(), 600 );
+	$s_row     = $ovb_rs_rrepo->find( $s_id );
+	ovb_check( 'restore recovery: after the maximum number of attempts the job fails with a clear message and its files are removed', in_array( $s_id, $recovered['failed'], true ) && 'failed' === $s_row['status'] && false !== strpos( (string) $s_row['error'], 'stopped making progress' ) && 0 === $rs_pending( $s_id ) && ! file_exists( ovb_rs_work( $s_id ) ), wp_json_encode( $recovered ) . ' ' . (string) $s_row['error'] );
+	$ovb_rs_rrepo->update_status( $v_id, 'cancelled' );
+
+	// 18m. A damaged local copy falls back to the next copy automatically.
+	ovb_rs_flip( $ovb_rs_primary . '/' . $big_part['file_name'] );
+	$j = $rs_start( 'full' );
+	ovb_check( 'restore corruption: a local part with the right size but flipped bits is not noticed by the plan', true === $j['ok'] && 0 === $j['plan']['chosen_source'], wp_json_encode( $j['errors'] ) );
+	$j_id  = $j['restore_id'];
+	$j_out = ovb_rs_drive( $rrunner, $j_id );
+	$j_row = $ovb_rs_rrepo->find( $j_id );
+	$j_meta = $ovb_rs_rrepo->load_state( $j_id )->get_meta();
+	ovb_check( 'restore corruption: verify finds the damaged local part and the job continues with the folder copy and verifies it', 'verified' === $j_row['status'] && isset( $j_meta['verified'] ) && $d_loc === $j_meta['verified']['source'] && array( 0 ) === RestoreMeta::tried( $j_meta ), wp_json_encode( array_count_values( $j_out ) ) . ' ' . (string) $j_row['error'] . wp_json_encode( $j_meta ) );
+	ovb_check( 'restore corruption: the files now in the work folder are the exact good copies', $rs_verify_files( $j_id ) );
+	$rmgr->cancel( $j_id );
+
+	// 18n. Every copy damaged: a clear failure that names the part.
+	ovb_rs_flip( $dest_copy . '/' . $big_part['file_name'] );
+	ovb_rs_s3_corrupt( $ovb_rs_s3, $s3_ref, get_temp_dir() );
+	$k_start = $rs_start( 'full' );
+	$k_id    = $k_start['restore_id'];
+	$k_out   = ovb_rs_drive( $rrunner, $k_id );
+	$k_row   = $ovb_rs_rrepo->find( $k_id );
+	$k_state = $ovb_rs_rrepo->load_state( $k_id );
+	ovb_check( 'restore corruption: with every copy damaged the restore fails (not verified)', true === $k_start['ok'] && 'failed' === $k_row['status'] && RestoreRunner::OUTCOME_FAILED === end( $k_out ), wp_json_encode( array_count_values( $k_out ) ) . ' ' . (string) $k_row['error'] );
+	ovb_check( 'restore corruption: the message names the damaged part and says what to do, without a server path', false !== strpos( (string) $k_row['error'], $big_part['file_name'] ) && false !== stripos( (string) $k_row['error'], 'checksum does not match' ) && false !== strpos( (string) $k_row['error'], 'No other complete copy' ) && false === strpos( (string) $k_row['error'], ABSPATH ) && false === strpos( (string) $k_row['error'], WP_CONTENT_DIR ), (string) $k_row['error'] );
+	ovb_check( 'restore corruption: all three sources were tried once each, in order', array( 0, $d_loc, $d_s3 ) === RestoreMeta::tried( $k_state->get_meta() ), wp_json_encode( $k_state->get_meta() ) );
+	ovb_check( 'restore corruption: the failed job left no work folder, no lock, no queued action and a terminal state', ! file_exists( ovb_rs_work( $k_id ) ) && null === ovb_rs_lock_value() && 0 === $rs_pending( $k_id ) && $k_state->is_terminal() && null !== $k_row['finished_at'] );
+} catch ( \Throwable $e ) {
+	ovb_check( 'restore: no exception while running the restore checks', false, get_class( $e ) . ': ' . $e->getMessage() . ' at ' . basename( $e->getFile() ) . ':' . $e->getLine() );
+} finally {
+	// Put everything back, whatever happened above.
+	if ( isset( $ovb_rs_lenient_filter ) ) {
+		remove_filter( 'ovb_restore_steps', $ovb_rs_lenient_filter );
+	}
+	if ( '' !== $ovb_rs_primary && is_dir( $ovb_rs_primary . '-hidden' ) && ! is_dir( $ovb_rs_primary ) ) {
+		rename( $ovb_rs_primary . '-hidden', $ovb_rs_primary );
+	}
+	if ( isset( $rrunner ) ) {
+		foreach ( $ovb_rs_restore_ids as $cleanup_restore ) {
+			$rrunner->cancel( $cleanup_restore );
+			as_unschedule_all_actions( RestoreRunner::ACTION, array( (int) $cleanup_restore ), RestoreRunner::GROUP );
+			RestoreWorkDir::remove( $cleanup_restore );
+		}
+	}
+	foreach ( (array) glob( Paths::tmp_dir() . '/restore-[0-9]*' ) as $leftover_restore ) {
+		CleanupStep::remove_tree( $leftover_restore );
+	}
+	foreach ( $ovb_rs_decoys as $decoy ) {
+		ovb_arc_rm( $decoy );
+	}
+	$wpdb->query( "DELETE FROM `{$ovb_rs_restores}`" );
+	if ( null !== $ovb_rs_s3 && '' !== $ovb_rs_folder ) {
+		try {
+			$ovb_rs_s3->delete( RemotePath::folder( RemotePath::site_host( site_url() ), $ovb_rs_folder ) );
+		} catch ( \Throwable $e ) {
+			unset( $e );
+		}
+	}
+	if ( '' !== $ovb_s3_endpoint ) {
+		$bucket_gone = ovb_s3_bucket_call( 'DELETE', $ovb_s3_endpoint, $ovb_s3_access, $ovb_s3_secret, $ovb_rs_bucket );
+	}
+	if ( $ovb_rs_job > 0 ) {
+		$wpdb->delete( $ovb_prefix . 'backup_files', array( 'backup_id' => $ovb_rs_job ) );
+		$wpdb->delete( $ovb_prefix . 'backups', array( 'id' => $ovb_rs_job ) );
+		$wpdb->delete( $ovb_prefix . 'logs', array( 'backup_id' => $ovb_rs_job ) );
+		ovb_clear_pending( $ovb_rs_job );
+	}
+	if ( '' !== $ovb_rs_primary ) {
+		ovb_arc_rm( $ovb_rs_primary );
+		ovb_arc_rm( $ovb_rs_primary . '-hidden' );
+	}
+	foreach ( $ovb_rs_dest_ids as $dest_id ) {
+		$drepo->delete( $dest_id );
+	}
+	ovb_arc_rm( $ovb_rs_dest_path );
+	ovb_arc_rm( $ovb_rs_fixture );
+	update_option( 'ovb_settings', $ovb_rs_settings );
+	$wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE 'ovb\\_lock\\_%'" );
+	foreach ( (array) glob( Paths::tmp_dir() . '/*', GLOB_ONLYDIR ) as $leftover_dir ) {
+		if ( Manifest::is_valid_uuid( basename( $leftover_dir ) ) ) {
+			CleanupStep::remove_tree( $leftover_dir );
+		}
+	}
+}
+ovb_check( 'restore: backup, destinations, S3 bucket, folders, work folders, restore rows and locks cleaned up', 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$ovb_rs_restores}`" ) && 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$ovb_prefix}destinations WHERE label LIKE 'Matrix restore%'" ) && ! file_exists( $ovb_rs_dest_path ) && ! file_exists( $ovb_rs_fixture ) && array() === (array) glob( Paths::tmp_dir() . '/restore-*' ) && 0 === count( glob( Paths::backups_dir() . '/*', GLOB_ONLYDIR ) ?: array() ) && 0 === (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->options} WHERE option_name LIKE 'ovb\\_lock\\_%'" ) && in_array( $bucket_gone, array( 200, 204 ), true ), 'bucket delete: ' . $bucket_gone );
+ovb_check( 'restore: the schema version is the current one after the migration checks', (string) get_option( 'ovb_db_version' ) === OVB_DB_VERSION );
+
+// 19. Database restore (Milestone 5, step 5b): see check-restore-db.php (wreck and restore for every format, snapshot, maintenance mode,
+// self-preservation, kills, tampered dumps, refusals).
+require __DIR__ . '/check-restore-db.php';
+
+// 20. Files restore and undo (Milestone 5, step 5c): see check-restore-files.php (wreck and restore of files and of everything for every format, the
+// undo journal and Undo, protected paths, kills, hostile archives, a full disk, cancel rules, refusals).
+require __DIR__ . '/check-restore-files.php';
+
+// 21. Restore REST routes and pages (Milestone 5, step 5d): see check-restore-rest.php (routes, capability, phrase, status token, no leaks, banner).
+require __DIR__ . '/check-restore-rest.php';
 
 // 11. Plugin did not leave an error behind.
 ovb_check( 'no database error', '' === $wpdb->last_error, $wpdb->last_error );

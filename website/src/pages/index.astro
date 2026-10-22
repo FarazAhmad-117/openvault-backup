@@ -2,221 +2,163 @@
 import Base from '../layouts/Base.astro';
 import DownloadButton from '../components/DownloadButton.astro';
 import StatusBadge from '../components/StatusBadge.astro';
-import VaultHero from '../components/VaultHero.astro';
-import FeatureGrid from '../components/FeatureGrid.astro';
-import { TAGLINE, PLUGIN_VERSION, repoUrl } from '../config/site';
+import SplitHeading from '../components/SplitHeading.astro';
+import Icon from '../components/Icon.astro';
+import HomeHero from '../components/home/HomeHero.astro';
+import TrustStrip from '../components/TrustStrip.astro';
+import ProductTour from '../components/home/ProductTour.astro';
+import RestoreBand from '../components/home/RestoreBand.astro';
+import Bento from '../components/home/Bento.astro';
+import HowTravels from '../components/home/HowTravels.astro';
+import RoadmapStrip from '../components/home/RoadmapStrip.astro';
+import Buckets from '../components/art/Buckets.astro';
+import Folder from '../components/art/Folder.astro';
+import Drive from '../components/art/Drive.astro';
+import VaultDial from '../components/VaultDial.astro';
+import { repoUrl } from '../config/site';
 import { featuredFaqs } from '../data/faq';
+import { providers } from '../data/providers';
 import { statusOf } from '../lib/registry';
 import { softwareApplication, faqPage } from '../lib/jsonld';
 
-
-const description = 'Free, open-source WordPress backup plugin for your own S3-compatible storage or a folder. Pre-alpha: no restore or Google Drive yet.';
-
-const principles = [
-  {
-    n: '01',
-    title: 'Your credentials',
-    text: 'You connect your own S3 keys today, and your own Google OAuth app once Google Drive is built. Tokens and data travel only between your site and your storage. There are no relay servers.',
-    badges: [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3']],
-  },
-  {
-    n: '02',
-    title: 'Built for cheap hosting',
-    text: 'Everything long-running is designed to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory.',
-    badges: [['Backups', 'backup-manual']],
-  },
-  {
-    n: '03',
-    title: 'Restore you can trust',
-    text: 'Archives are built to carry checksums. A restore is designed to take a safety snapshot first, and the plugin is built to protect itself while the restore runs.',
-    badges: [['Restore', 'restore-in-place']],
-  },
-] as const;
-
-const destinations = [
-  { name: 'Google Drive', href: '/google-drive/', id: 'destination-gdrive' },
-  { name: 'S3-compatible', href: '/s3-r2/', id: 'destination-s3' },
-  { name: 'Cloudflare R2', href: '/s3-r2/cloudflare-r2/', id: 'destination-s3' },
-  { name: 'Backblaze B2', href: '/s3-r2/backblaze-b2/', id: 'destination-s3' },
-  { name: 'Wasabi', href: '/s3-r2/wasabi/', id: 'destination-s3' },
-  { name: 'AWS S3', href: '/s3-r2/aws-s3/', id: 'destination-s3' },
-  { name: 'DigitalOcean Spaces', href: '/s3-r2/digitalocean-spaces/', id: 'destination-s3' },
-];
-
-const steps = [
-  { title: 'Connect your storage', text: 'Add your own S3-compatible keys or a local folder. Google Drive is planned. You stay in control of the credentials.', id: 'destination-s3' },
-  { title: 'Choose what and when', text: 'Pick database, plugins, themes and uploads, choose where to send it, and run it by hand. Schedules are planned.', id: 'backup-manual' },
-  { title: 'Restore with a safety net', text: 'Restore from history, with a safety snapshot taken before anything is overwritten.', id: 'restore-in-place' },
-];
-
+const description = 'Free, open-source WordPress backup plugin for S3-compatible storage or a folder. Pre-alpha: backup and restore with undo, no schedules or Drive yet.';
 const faq = featuredFaqs;
 ---
 
-<Base description={description} path="/" jsonLd={[softwareApplication(), faqPage(faq)]}>
-  <section class="hero">
-    <div class="container hero-grid">
-      <div class="hero-copy stack-lg">
-        <h1>WordPress backups, in a vault only you hold the key to.</h1>
-        <p class="lede">{TAGLINE}</p>
-        <div class="cluster">
-          <DownloadButton />
-          <a class="btn btn--secondary" href={repoUrl()} rel="noopener">Star on GitHub</a>
-        </div>
-      </div>
-      <div class="hero-art"><VaultHero /></div>
-    </div>
-  </section>
+<Base description={description} path="/" jsonLd={[softwareApplication(), faqPage(faq)]} announce>
+  <HomeHero />
 
-  <aside class="strip" aria-label="Project status">
-    <div class="container strip-in">
-      <StatusBadge status="in-progress" />
-      <p>Pre-alpha {PLUGIN_VERSION}: it backs up your database and files, keeps a copy on your server and can also send them to S3-compatible storage or another folder. It cannot restore, schedule, delete old backups, use Google Drive or encrypt archives yet.</p>
-      <a class="link" href="/roadmap/">See the roadmap</a>
-    </div>
-  </aside>
+  <TrustStrip />
 
-  <section class="section">
+  <ProductTour />
+
+  <Bento />
+
+  <RestoreBand />
+
+  <HowTravels />
+
+  <section class="section dest" aria-labelledby="dest-h">
     <div class="container">
-      <h2 class="sec-title">Three promises, by design</h2>
-      <ol role="list" class="principles">
-        {principles.map((p) => (
-          <li class="principle">
-            <span class="num" aria-hidden="true">{p.n}</span>
-            <div class="p-body">
-              <h3>{p.title}</h3>
-              <p class="muted">{p.text}</p>
-            </div>
-            <ul role="list" class="p-badges">
-              {p.badges.map(([name, id]) => (
-                <li><span class="small muted">{name}</span> <StatusBadge status={statusOf(id)} /></li>
-              ))}
-            </ul>
-          </li>
-        ))}
-      </ol>
-    </div>
-  </section>
-
-  <section class="section section--surface">
-    <div class="container stack-lg">
-      <div class="stack">
-        <h2 class="sec-title">What it will do</h2>
-        <p class="lede">Every item below carries its real status. Nothing is marked available until it ships in a release.</p>
+      <div class="sec-head">
+        <p class="eyebrow" data-reveal>Destinations</p>
+        <SplitHeading id="dest-h" class="h-xl" lines={['Your server,', 'your bucket.']} />
       </div>
-      <FeatureGrid />
-    </div>
-  </section>
-
-  <section class="section">
-    <div class="container stack-lg">
-      <h2 class="sec-title">Destinations</h2>
-      <ul role="list" class="dests">
-        {destinations.map((d) => (
-          <li>
-            <a class="dest" href={d.href}>
-              <span class="dest-name">{d.name}</span>
-              <StatusBadge status={statusOf(d.id)} />
-            </a>
-          </li>
-        ))}
+      <ul role="list" class="dests" data-reveal="stagger">
+        <li>
+          <article class="card">
+            <div class="art-wrap" aria-hidden="true"><Buckets /></div>
+            <h3>S3-compatible storage</h3>
+            <p>Your own keys, any provider that speaks S3.</p>
+            <ul role="list" class="pchips">
+              {providers.map((p) => (<li><a class="pchip" href={`/s3-r2/${p.slug}/`} data-cursor="Read">{p.name}</a></li>))}
+              <li><a class="pchip" href="/s3-r2/s3-compatible-setup/" data-cursor="Read">Custom endpoint</a></li>
+            </ul>
+            <p class="nuance mono">Verified live against one server (SeaweedFS). The others follow their documented endpoint patterns.</p>
+            <StatusBadge status={statusOf('destination-s3')} />
+          </article>
+        </li>
+        <li>
+          <article class="card">
+            <div class="art-wrap" aria-hidden="true"><Folder /></div>
+            <h3>A folder on your server</h3>
+            <p>Every backup lands in a protected folder first. Add another folder for a second copy.</p>
+            <StatusBadge status={statusOf('destination-local')} />
+            <a class="link" href="/how-it-works/" data-cursor="Read">How it works</a>
+          </article>
+        </li>
+        <li>
+          <article class="card card--planned">
+            <div class="art-wrap art--planned" aria-hidden="true"><Drive /></div>
+            <h3>Google Drive</h3>
+            <p>Planned: your own OAuth app, drive.file scope only.</p>
+            <StatusBadge status={statusOf('destination-gdrive')} />
+            <a class="link" href="/google-drive/" data-cursor="Read">What is planned</a>
+          </article>
+        </li>
       </ul>
     </div>
   </section>
 
-  <section class="section section--surface">
-    <div class="container">
-      <h2 class="sec-title">How it works</h2>
-      <p class="muted flag">This is the flow the plugin is being built to follow. Each step shows where it stands today.</p>
-      <ol role="list" class="steps">
-        {steps.map((s, i) => (
-          <li class="step">
-            <span class="step-n" aria-hidden="true">{i + 1}</span>
-            <h3>{s.title}</h3>
-            <p class="muted">{s.text}</p>
-            <StatusBadge status={statusOf(s.id)} />
-          </li>
-        ))}
-      </ol>
-    </div>
-  </section>
+  <RoadmapStrip />
 
-  <section class="section">
+  <section class="section faq" aria-labelledby="faq-h">
     <div class="container faq-grid">
       <div class="stack">
-        <h2 class="sec-title">Straight answers</h2>
-        <a class="link" href="/faq/">Read the full FAQ</a>
+        <p class="eyebrow" data-reveal>Straight answers</p>
+        <SplitHeading id="faq-h" class="h-xl" lines={['Questions,', 'answered plainly.']} />
+        <a class="link" href="/faq/" data-cursor="Read">Read the full FAQ</a>
       </div>
-      <div class="qa">
+      <div class="qa" data-reveal="stagger">
         {faq.map((f) => (
-          <div class="qa-item">
-            <h3>{f.q}</h3>
+          <details class="qa-item" data-accordion>
+            <summary data-cursor="Open"><span>{f.q}</span><i aria-hidden="true"></i></summary>
             <p class="muted">{f.a}</p>
-          </div>
+          </details>
         ))}
       </div>
     </div>
   </section>
 
-  <section class="section cta">
-    <div class="container stack-lg">
-      <h2 class="sec-title">Follow the build, or try the pre-alpha.</h2>
-      <p class="lede">The plugin can back up your database and files to your server and to S3-compatible storage or a folder, but it cannot restore them, run schedules, clean up old backups, use Google Drive or encrypt archives yet. Do not rely on it as your only backup. Download it to test, follow along or contribute.</p>
-      <div class="cluster">
-        <DownloadButton />
-        <a class="btn btn--secondary" href={repoUrl()} rel="noopener">Star on GitHub</a>
+  <section class="section cta band-ultra" data-scrub="pass" aria-labelledby="cta-h">
+    <div class="container cta-grid">
+      <div class="stack-lg">
+        <p class="eyebrow" data-reveal>Try the pre-alpha</p>
+        <SplitHeading id="cta-h" class="h-xl cta-h" lines={['Back up to a', 'bucket you own.']} />
+        <p class="lede" data-reveal>Pre-alpha: try restore on a copy of your site first. Do not rely on it as your only backup.</p>
+        <div class="cluster" data-reveal data-reveal-delay="100">
+          <DownloadButton />
+          <a class="btn btn--secondary" href={repoUrl()} rel="noopener" data-cursor="Read"><Icon name="code" size={18} /> Star on GitHub</a>
+        </div>
       </div>
+      <VaultDial class="cta-dial" />
     </div>
   </section>
 </Base>
 
 <style>
-  .hero { padding-block: var(--space-8) var(--space-7); background:
-    radial-gradient(60rem 30rem at 85% 0%, rgb(224 164 88 / 0.07), transparent 70%); }
-  .hero-grid { display: grid; gap: var(--space-7); align-items: center; }
-  .hero-copy h1 { max-width: 16ch; }
-  .hero-art { min-width: 0; }
-  .hero-copy .cluster { align-items: flex-start; }
-  .strip { background: var(--surface); border-block: 1px solid var(--line); }
-  .strip-in { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); padding-block: var(--space-4); }
-  .strip-in p { max-width: none; font-weight: 500; }
-  .strip-in .link { margin-left: auto; }
-  .sec-title { font-size: var(--step-4); max-width: 18ch; }
+  .dests { padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .dests > li { display: grid; }
+  .dests .card { gap: var(--space-3); justify-items: start; }
+  .dests .card p { max-width: 42ch; }
+  .dests :global(.art) { max-height: 8.5rem; }
+  .nuance { font-size: 0.6875rem; line-height: 1.6; text-transform: none; letter-spacing: 0.02em; color: var(--muted); }
 
-  .principles { padding: 0; margin-top: var(--space-7); display: grid; }
-  .principle { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
-  .principle:last-child { border-bottom: 1px solid var(--line-strong); }
-  .num { font-family: var(--font-display); font-size: var(--step-4); line-height: 1; color: var(--accent); }
-  .p-body { display: grid; gap: var(--space-3); }
-  .p-body p { max-width: 46ch; }
-  .p-badges { padding: 0; display: grid; gap: var(--space-2); align-content: start; justify-items: start; }
-  .p-badges li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-
-  .dests { padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); border-top: 1px solid var(--line-strong); border-left: 1px solid var(--line); }
-  .dest { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); padding: var(--space-5); text-decoration: none; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); height: 100%; }
-  .dest:hover { background: var(--surface); }
-  .dest-name { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.1; }
-
-  .flag { margin-top: var(--space-4); }
-  .steps { padding: 0; margin-top: var(--space-7); display: grid; gap: var(--space-6); }
-  .step { display: grid; gap: var(--space-3); justify-items: start; border-top: 1px solid var(--accent); padding-top: var(--space-5); }
-  .step-n { font-family: var(--font-display); font-size: var(--step-4); line-height: 1; color: var(--accent); }
-
+  .faq .link { display: inline-block; margin-top: var(--space-5); }
   .faq-grid { display: grid; gap: var(--space-7); }
-  .qa { display: grid; }
-  .qa-item { padding-block: var(--space-5); border-top: 1px solid var(--line-strong); display: grid; gap: var(--space-2); }
-  .qa-item:last-child { border-bottom: 1px solid var(--line-strong); }
+  .qa { display: grid; border-top: 1px solid var(--line-strong); }
+  .qa-item { border-bottom: 1px solid var(--line-strong); }
+  .qa-item summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding-block: var(--space-5); cursor: pointer; list-style: none; font-family: var(--font-display); font-size: var(--step-2); line-height: 1.15; }
+  .qa-item summary::-webkit-details-marker { display: none; }
+  .qa-item summary:hover { color: var(--accent); }
+  .qa-item summary i { position: relative; flex: none; width: 1.25rem; height: 1.25rem; }
+  .qa-item summary i::before, .qa-item summary i::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: currentColor; transition: transform 0.45s var(--ease-out); }
+  .qa-item summary i::after { transform: rotate(90deg); }
+  .qa-item[open] summary i::after { transform: rotate(0); }
+  .qa-item p { padding-bottom: var(--space-5); max-width: 56ch; }
 
-  .cta { border-top: 1px solid var(--line); }
-  .cta .sec-title { max-width: 20ch; }
-
-  @media (min-width: 48rem) {
-    .principle { grid-template-columns: 6rem minmax(0, 1fr) 14rem; align-items: start; }
-    .steps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-6); }
-    .step:nth-child(2) { margin-top: var(--space-6); }
-    .step:nth-child(3) { margin-top: var(--space-8); }
+  .cta { position: relative; overflow: clip; --p: 0.5; }
+  .cta-grid { display: grid; gap: var(--space-7); align-items: center; }
+  .cta :global(.cta-h) { max-width: 12ch; }
+  :global(.cta-dial) { width: min(100%, 26rem); height: auto; justify-self: center; overflow: visible; }
+  :global(.cta-dial .ring) { fill: none; stroke: var(--line-strong); stroke-width: 0.8; }
+  :global(.cta-dial .ticks) { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+  :global(.cta-dial .lock) { fill: none; stroke: var(--accent); stroke-width: 0.6; opacity: 0.4; }
+  :global(.cta-dial .ptr) { fill: var(--accent); }
+  :global(.cta-dial .spin) { transform-box: view-box; transform-origin: 50% 50%; }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.js) .cta { --p: 0; }
+    :global(.cta-dial .spin) { transform: rotate(calc(var(--p) * 300deg)); }
+    :global(html.js) .cta::before {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(36rem 28rem at 75% 50%, rgb(224 164 88 / 0.14), transparent 70%); opacity: calc(var(--p) * 1.6);
+    }
   }
+
+  @media (min-width: 48rem) { .dests { grid-template-columns: repeat(2, minmax(0, 1fr)); } .dests > li:first-child { grid-column: span 2; } }
+  @media (min-width: 64rem) { .dests { grid-template-columns: 1.4fr 1fr 1fr; } .dests > li:first-child { grid-column: auto; } }
   @media (min-width: 60rem) {
-    .hero-grid { grid-template-columns: 1.15fr 0.85fr; }
     .faq-grid { grid-template-columns: 0.8fr 1.2fr; }
+    .cta-grid { grid-template-columns: 1.2fr 0.8fr; }
   }
 </style>

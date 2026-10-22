@@ -8,6 +8,8 @@ import { faqsByTag } from '../../data/faq';
 import { faqPage, breadcrumbs } from '../../lib/jsonld';
 import { guideHref } from '../../lib/guides';
 import { providers } from '../../data/providers';
+import Icon from '../../components/Icon.astro';
+import Buckets from '../../components/art/Buckets.astro';
 
 const description = 'Back up WordPress to S3, Cloudflare R2, Backblaze B2, Wasabi or Spaces with your own bucket. Pre-alpha, tested live against one server only.';
 const trail = [{ name: 'Home', path: '/' }, { name: 'S3 & R2', path: '/s3-r2/' }];
@@ -19,32 +21,36 @@ const genericHref = guideHref('s3-compatible-setup');
 <Base title="Back up WordPress to S3, R2, B2 and Wasabi" description={description} path="/s3-r2/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="S3 & R2" path="/s3-r2/" title="Back up WordPress to S3, Cloudflare R2, Backblaze B2 or Wasabi">
     <p>OpenVault Backup can send backups to a bucket you own, on any S3-compatible service, using access keys you create yourself.</p>
-    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: available in 0.2.0, tested live against one S3-compatible server only.</span></p>
+    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: available since 0.2.0, tested live against one S3-compatible server only.</span></p>
+    <div slot="visual" aria-hidden="true"><Buckets /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <div class="warn-box" role="note">
-        <h2>Available in 0.2.0 (pre-alpha), tested live against one server</h2>
-        <p>The plugin can send backups to an S3-compatible bucket. It was tested live against one S3-compatible server (SeaweedFS). Amazon S3, Cloudflare R2, Backblaze B2, Wasabi and DigitalOcean Spaces are covered by unit tests and each provider's documented endpoint pattern, not by real calls, so please report problems. It cannot restore a backup, run schedules or delete old backups yet. Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
+      <div class="warn-box" role="note" data-reveal>
+        <h2>Available since 0.2.0 (pre-alpha), tested live against one server</h2>
+        <p>The plugin can send backups to an S3-compatible bucket. It was tested live against one S3-compatible server (SeaweedFS). Amazon S3, Cloudflare R2, Backblaze B2, Wasabi and DigitalOcean Spaces are covered by unit tests and each provider's documented endpoint pattern, not by real calls, so please report problems. It cannot run schedules or delete old backups yet. Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
       </div>
 
-      <h2 class="sec-title">One signer, many providers</h2>
-      <div class="grid grid--3">
-        <article class="panel stack">
+      <div class="stack"><p class="eyebrow" data-reveal>How it works</p><h2 class="sec-title" data-reveal>One signer, many providers</h2></div>
+      <div class="grid grid--3" data-reveal="stagger">
+        <article class="card">
+          <span class="card-ico"><Icon name="cloud" size={22} /></span>
           <h3>Bring your own bucket</h3>
           <p class="muted">You create the bucket and the access keys in your own account with the provider. There is no relay server, so only your site and your storage account ever see the data.</p>
         </article>
-        <article class="panel stack">
+        <article class="card">
+          <span class="card-ico"><Icon name="code" size={22} /></span>
           <h3>No AWS SDK</h3>
           <p class="muted">The plugin has its own Signature Version 4 signer and sends requests with the WordPress HTTP API. That one signer serves every provider below.</p>
         </article>
-        <article class="panel stack">
+        <article class="card">
+          <span class="card-ico"><Icon name="plug" size={22} /></span>
           <h3>Presets plus a custom endpoint</h3>
           <p class="muted">Presets cover AWS, Cloudflare R2, Backblaze B2, Wasabi and DigitalOcean Spaces. A custom endpoint option takes any other S3-compatible service.</p>
         </article>
       </div>
-      <ul role="list" class="facts">
+      <ul role="list" class="facts rows" data-reveal="stagger">
         <li><strong>Multipart uploads</strong><span class="muted">Large archives are sent in parts, and an interrupted upload resumes where it stopped, so a big backup does not depend on one long request.</span></li>
         <li><strong>A manifest with every backup</strong><span class="muted">Each backup also uploads a manifest.json. Rediscovering backups on a fresh install from it is planned, not built.</span></li>
         <li><strong>Uninstalling keeps your backups</strong><span class="muted">The plugin never deletes backups held at your remote destinations when you uninstall it.</span></li>
@@ -55,21 +61,21 @@ const genericHref = guideHref('s3-compatible-setup');
   <section class="section section--surface">
     <div class="container stack-lg">
       <div class="stack">
-        <h2 class="sec-title">Pick your provider</h2>
+        <p class="eyebrow" data-reveal>Providers</p>
+        <h2 class="sec-title" data-reveal>Pick your provider</h2>
         <p class="muted">Each provider names its endpoint a little differently. The patterns below come from each provider's own documentation, and every page links to it.</p>
       </div>
-      <ul role="list" class="ledger">
+    </div>
+    <div class="container stack-lg">
+      <ul role="list" class="provs" data-reveal="stagger">
         {providers.map((p) => (
-          <li class="row">
-            <div class="who">
-              <h3><a href={`/s3-r2/${p.slug}/`}>{p.name}</a></h3>
-              <StatusBadge status={status} />
-            </div>
-            <div class="ep">
-              <span class="label small muted">Endpoint pattern</span>
-              <code>{p.endpointPattern}</code>
-            </div>
-            <p class="muted note">{p.regionNote}</p>
+          <li>
+            <article class="card">
+              <div class="who"><h3><a href={`/s3-r2/${p.slug}/`}>{p.name}</a></h3><StatusBadge status={status} /></div>
+              <div class="term"><div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>endpoint</span></div><pre><code>{p.endpointPattern}</code></pre></div>
+              <p>{p.regionNote}</p>
+              <a class="link" href={`/s3-r2/${p.slug}/`} data-cursor="Read">Setup for {p.shortName}</a>
+            </article>
           </li>
         ))}
       </ul>
@@ -80,7 +86,7 @@ const genericHref = guideHref('s3-compatible-setup');
   <section class="section">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">How your keys are protected</h2>
+        <h2 class="sec-title" data-reveal>How your keys are protected</h2>
       </div>
       <div class="stack">
         <p class="muted">Access keys and secrets are encrypted at rest in the plugin, using a key derived from your WordPress salts or an <code>OVB_ENCRYPTION_KEY</code> constant that you can set in wp-config. The secret key is write-only: it is never shown again or logged, and you can only replace it. If you change your salts you must enter the keys again.</p>
@@ -93,7 +99,7 @@ const genericHref = guideHref('s3-compatible-setup');
   <section class="section section--surface">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">Questions</h2>
+        <h2 class="sec-title" data-reveal>Questions</h2>
         <p class="muted">The short answers are on the <a class="link" href="/faq/">FAQ</a>.</p>
       </div>
       <div class="stack-lg">
@@ -110,25 +116,29 @@ const genericHref = guideHref('s3-compatible-setup');
 </Base>
 
 <style>
-  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
-  .panel h3 { font-size: var(--step-2); }
+  .card h3 { font-size: var(--step-2); line-height: 1.1; }
+  .card p { max-width: none; }
   .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
-  .facts { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
-  .facts li { display: grid; gap: var(--space-1); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
-  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
-  .row { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
+  .facts { padding: 0; }
+  .facts li { display: grid; gap: var(--space-1); padding-block: var(--space-4); }
+  .facts li strong { font-family: var(--font-display); font-weight: 400; font-size: var(--step-2); }
+  .provs { padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .provs > li { display: grid; }
+  .provs .term pre { padding: var(--space-3) var(--space-4); }
+  .provs .term code { font-size: 0.8125rem; overflow-wrap: anywhere; }
+  .row { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); min-width: 0; }
   .who { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-4); }
-  .who h3 { font-size: var(--step-2); }
+  .who h3 { font-size: clamp(1.75rem, 1.2rem + 2vw, 3rem); line-height: 1.05; }
   .who h3 a { text-decoration: none; }
   .who h3 a:hover { text-decoration: underline; }
   .ep { display: grid; gap: var(--space-1); min-width: 0; }
   .ep code { overflow-wrap: anywhere; justify-self: start; max-width: 100%; }
   .note { max-width: 56ch; }
   .qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
-  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
+  
   @media (min-width: 60rem) {
     .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
-    .row { grid-template-columns: 15rem minmax(0, 1fr); align-items: start; }
+    .provs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .note { grid-column: 2; }
   }
 </style>

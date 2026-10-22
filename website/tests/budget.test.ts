@@ -8,15 +8,17 @@ const gz = (b: Buffer | string) => gzipSync(b).length;
 describe.skipIf(!hasDist)('performance budget', () => {
   const files = htmlFiles();
 
-  it('every HTML page is under 40 KB gzipped', () => {
+  it('every HTML page is under 16 KB gzipped', () => {
     for (const f of files) {
       expect(gz(readFileSync(f)), route(f)).toBeLessThan(40 * 1024);
     }
   });
 
-  it('total JavaScript is under 20 KB gzipped', () => {
+  // Total JS (measured 10.0 KB gz). Was 20 KB for a no-JS site; the cap is now 16 KB: Astro ClientRouter (5.3 KB) + our runtime (3.0 KB) + lazy chunks.
+  // No GSAP/Lenis (scroll-linked CSS custom properties instead): see website/README.md "JS budget".
+  it('total JavaScript is under 16 KB gzipped', () => {
     const total = walkAll().filter((f) => /\.m?js$/.test(f)).reduce((n, f) => n + gz(readFileSync(f)), 0);
-    expect(total).toBeLessThan(20 * 1024);
+    expect(total).toBeLessThan(16 * 1024);
   });
 
   it('every <img> has width and height', () => {

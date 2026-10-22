@@ -13,7 +13,7 @@ export const milestones: Milestone[] = [
     id: 'alpha',
     name: 'Alpha',
     channel: 'GitHub',
-    summary: 'The core loop works end to end. Backup, with local and S3-compatible destinations, works in 0.2.0; restore is the missing half.',
+    summary: 'The core loop works end to end. Backup, with local and S3-compatible destinations, and restore from history with undo both work in 0.3.0. It is still pre-alpha, so try restore on a copy of your site.',
     exit: ['Backup and restore round trip works on 3 test hosts'],
     phases: 'Core of the MVP',
   },

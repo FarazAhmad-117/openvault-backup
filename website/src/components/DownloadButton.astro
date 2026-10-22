@@ -1,17 +1,17 @@
 ---
 import { PLUGIN_VERSION, downloadUrl } from '../config/site';
 
-interface Props { variant?: 'primary' | 'secondary' }
-const { variant = 'primary' } = Astro.props;
+interface Props { variant?: 'primary' | 'secondary'; magnetic?: boolean }
+const { variant = 'primary', magnetic = variant === 'primary' } = Astro.props;
 const preAlpha = PLUGIN_VERSION.startsWith('0.');
 ---
 
 <div class="dl">
-  <a class={`btn btn--${variant}`} href={downloadUrl()} rel="noopener">Download for WordPress (.zip)</a>
-  {preAlpha && <p class="note muted small">Pre-alpha {PLUGIN_VERSION} (backups to your server, S3-compatible storage or a folder: no restore, schedules or Google Drive yet)</p>}
+  <a class={`btn btn--${variant}`} href={downloadUrl()} rel="noopener" data-cursor="Download" data-magnetic={magnetic ? '' : undefined}>Download for WordPress (.zip)</a>
+  {preAlpha && <p class="note muted small">Pre-alpha {PLUGIN_VERSION} (backups and restore from history; no schedules or Google Drive yet)</p>}
 </div>
 
 <style>
   .dl { display: inline-flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
-  .note { margin: 0; }
+  .dl .note.note { margin: 0; max-width: 36ch; font-size: var(--step--1); line-height: 1.5; }
 </style>

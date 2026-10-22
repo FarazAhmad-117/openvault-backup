@@ -1,6 +1,6 @@
 # Folder Structure
 
-Every PHP file is a plan stub: open it to see its phase (MVP / Phase 2 / Phase 3), purpose and responsibilities. Read docs/plan/ in numeric order.
+Files that are still plan stubs say so in their docblock (phase, purpose, responsibilities); implemented files keep that docblock as their spec. Restore (Milestone 5): the engine core (plan, preflight, fetch, verify, runner), the database restore (safety snapshot, maintenance mode, self-preservation, statement whitelist, streamed importer; step 5b) and the file restore with its rollback journal and undo (`ExtractionPolicy`, `SafeWriter`, `FileRestorer`, `UndoJournal`, `UndoStore`, `FileUndoer`, `Archive/EntryWalker`; step 5c) are implemented in `includes/Restore/`; the user-facing restore (REST routes `Rest/RestoreRestController`, the Restore page with `assets/admin/js/restore.js`, progress, status token, History action, banner; step 5d) sits on top; RemoteIndexer and UploadReceiver are still stubs. Read docs/plan/ in numeric order.
 
 ```
 openvault-backup/
@@ -57,6 +57,8 @@ openvault-backup/
 |   |   `-- Menu.php
 |   |-- Archive
 |   |   |-- ArchiveException.php
+|   |   |-- ArchiveReader.php
+|   |   |-- EntryWalker.php
 |   |   |-- ArchiverInterface.php
 |   |   |-- CapabilityDetector.php
 |   |   |-- Encryptor.php
@@ -78,6 +80,7 @@ openvault-backup/
 |   |   |-- BackupsRepository.php
 |   |   |-- DestinationsRepository.php
 |   |   |-- LogsRepository.php
+|   |   |-- RestoresRepository.php
 |   |   |-- SchedulesRepository.php
 |   |   `-- Util.php
 |   |-- Destinations
@@ -106,6 +109,7 @@ openvault-backup/
 |   |   |-- DestinationRegistry.php
 |   |   |-- DestinationSettings.php
 |   |   |-- RemotePath.php
+|   |   |-- ResumableDownloadInterface.php
 |   |   |-- TestResult.php
 |   |   `-- UploadProgress.php
 |   |-- Engine
@@ -153,14 +157,43 @@ openvault-backup/
 |   |   |-- DestinationsRestController.php
 |   |   `-- RestController.php
 |   |-- Restore
+|   |   |-- Steps
+|   |   |   |-- AbstractRestoreStep.php
+|   |   |   |-- DbRestoreStep.php
+|   |   |   |-- FetchStep.php
+|   |   |   |-- FileRestoreStep.php
+|   |   |   |-- FileUndoStep.php
+|   |   |   |-- FinishStep.php
+|   |   |   |-- PreflightStep.php
+|   |   |   |-- SnapshotStep.php
+|   |   |   `-- VerifyStep.php
 |   |   |-- DatabaseImporter.php
+|   |   |-- DestinationFactory.php
+|   |   |-- DumpRejectedException.php
+|   |   |-- DumpValidator.php
+|   |   |-- ExtractionPolicy.php
+|   |   |-- FileRestoreException.php
 |   |   |-- FileRestorer.php
+|   |   |-- FileUndoer.php
+|   |   |-- FsProbe.php
+|   |   |-- ImportException.php
 |   |   |-- MaintenanceMode.php
+|   |   |-- PlanLoader.php
 |   |   |-- RemoteIndexer.php
 |   |   |-- RestoreManager.php
+|   |   |-- RestoreMeta.php
+|   |   |-- RestorePlan.php
+|   |   |-- RestorePreflight.php
+|   |   |-- RestoreRunner.php
+|   |   |-- RestoreWorkDir.php
+|   |   |-- SafeWriter.php
 |   |   |-- SafetySnapshot.php
 |   |   |-- SelfPreserver.php
-|   |   `-- UploadReceiver.php
+|   |   |-- SqlExecutor.php
+|   |   |-- UndoJournal.php
+|   |   |-- UndoStore.php
+|   |   |-- UploadReceiver.php
+|   |   `-- WpdbExecutor.php
 |   |-- Scheduling
 |   |   |-- RetentionPolicy.php
 |   |   `-- Scheduler.php

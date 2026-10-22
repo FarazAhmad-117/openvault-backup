@@ -1,6 +1,6 @@
 export const SITE_NAME = 'OpenVault Backup';
 export const TAGLINE = 'Free WordPress backups to your own cloud. No middleman, no paid tiers.';
-export const PLUGIN_VERSION = '0.2.0'; // keep equal to openvault-backup.php (checked by tests/version.test.ts)
+export const PLUGIN_VERSION = '0.3.0'; // keep equal to openvault-backup.php (checked by tests/version.test.ts)
 export const PLACEHOLDER_SITE_URL = 'https://example.invalid';
 export const siteUrl = () => process.env.SITE_URL || import.meta.env?.SITE || PLACEHOLDER_SITE_URL;
 export const isConfiguredSite = () => !siteUrl().includes('example.invalid');

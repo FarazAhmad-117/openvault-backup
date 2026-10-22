@@ -14,7 +14,7 @@ export const openvaultDesign: Record<Topic, DesignPoint> = {
     badges: [['Scheduled backups', 'backup-scheduled']],
   },
   restore: {
-    text: 'Designed to restore from history (full, database-only or files-only) and to take a safety snapshot first, so a restore can be undone. A manifest.json next to each backup is meant to let a fresh install rediscover it.',
+    text: 'Works today in pre-alpha: restore from history (whole site, database only or files only) with a safety snapshot first and an Undo. Pre-alpha, so try it on a copy first. Designed but not built: restoring an uploaded archive and rediscovering backups from manifest.json on a fresh install.',
     badges: [['Restore from history', 'restore-in-place'], ['Restore from upload', 'restore-upload']],
   },
   'pricing-model': {
@@ -29,15 +29,15 @@ export const openvaultDesign: Record<Topic, DesignPoint> = {
 
 export const fitCompetitor: Record<string, string[]> = {
   updraftplus: [
-    'You need backups that work today. UpdraftPlus is a released plugin on WordPress.org; OpenVault cannot restore, run schedules or send backups to Google Drive yet.',
+    'You need backups that work today. UpdraftPlus is a released plugin on WordPress.org; OpenVault cannot run schedules, restore an uploaded archive or send backups to Google Drive yet.',
     'You want the destinations its WordPress.org page lists for the free version, available now.',
   ],
   backwpup: [
-    'You need backups that work today. BackWPup is a released plugin; OpenVault cannot restore, run schedules or send backups to Google Drive yet.',
+    'You need backups that work today. BackWPup is a released plugin; OpenVault cannot run schedules, restore an uploaded archive or send backups to Google Drive yet.',
     'You want local, Dropbox, FTP or S3-compatible destinations in a free plugin now, as its WordPress.org page lists.',
   ],
   duplicator: [
     'You need to move a site to a new host or domain now. Duplicator is a released plugin that lists migration; OpenVault migration is planned for Phase 3.',
-    'You want one-click restore available today.',
+    'You want a released, widely used restore available today; OpenVault restore is new, pre-alpha and limited to backups in its own history.',
   ],
 };

@@ -2,10 +2,14 @@
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
 import DownloadButton from '../components/DownloadButton.astro';
+import ProductFrame from '../components/ProductFrame.astro';
+import Icon from '../components/Icon.astro';
+import { Picture } from 'astro:assets';
 import { PLUGIN_VERSION, repoUrl, devDownloadUrl, siteUrl } from '../config/site';
 import { howTo, breadcrumbs } from '../lib/jsonld';
+import { shots } from '../data/product';
 
-const description = 'Download OpenVault Backup, a free GPLv2 WordPress plugin. Pre-alpha: backs up to S3 or a folder, no restore yet. WordPress 6.5+, PHP 7.4+.';
+const description = 'Download OpenVault Backup, a free GPLv2 WordPress plugin. Pre-alpha: backup and restore with undo, no schedules yet. WordPress 6.5+, PHP 7.4+.';
 const trail = [{ name: 'Home', path: '/' }, { name: 'Download', path: '/download/' }];
 
 const checksumUrl = `${repoUrl()}/releases/latest/download/openvault-backup-${PLUGIN_VERSION}.zip.sha256`;
@@ -18,91 +22,104 @@ const steps = [
   { name: 'Install', text: 'Click Install Now and wait for WordPress to unpack the plugin.' },
   { name: 'Activate', text: 'Click Activate Plugin. OpenVault Backup now appears in the admin menu.' },
 ];
+const reqs = [
+  { icon: 'wp', k: 'WordPress', v: '6.5 or newer' },
+  { icon: 'code', k: 'PHP', v: '7.4 or newer' },
+  { icon: 'scale', k: 'License', v: 'GPLv2 or later, free' },
+];
 ---
 
 <Base title="Download" description={description} path="/download/" jsonLd={[howTo('Install OpenVault Backup on WordPress', steps), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Download" path="/download/" title="Download OpenVault Backup">
-    <p>Free, open source and GPLv2 or later. Version {PLUGIN_VERSION}, an early build for people who want to follow along, test or contribute.</p>
+    <p>Version {PLUGIN_VERSION}. Free and open source, for people who want to test, follow along or contribute.</p>
+    <div class="cluster get-cta"><DownloadButton /></div>
+    <div slot="visual"><ProductFrame {...shots.upload} eager sizes="(min-width: 64rem) 480px, 92vw" widths={[480, 800, 1200]} tilt /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <div class="warn-box" role="note">
+      <div class="warn-box" role="note" data-reveal>
         <h2>Pre-alpha: do not rely on it</h2>
-        <p>This build backs up your database and files, keeps a copy on your server and can also send it to S3-compatible storage or another folder. It cannot restore a backup, run schedules, delete old backups, send backups to Google Drive or encrypt archives yet, and a downloaded or off-site backup can only be unpacked by hand. S3 was verified live against one server only (SeaweedFS). Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
+        <p>This build backs up your database and files, keeps a copy on your server, can also send it to S3-compatible storage or another folder, and can restore a backup of this site from your history with a safety snapshot and an undo. Restore replaces your live site, so try it on a copy first. It cannot restore an uploaded archive, move a site to another domain, run schedules, delete old backups, send backups to Google Drive or encrypt archives yet. S3 was verified live against one server only (SeaweedFS). Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
       </div>
 
-      <div class="get">
-        <div class="stack">
-          <DownloadButton />
-        </div>
-        <ul role="list" class="alt">
-          <li><a class="link" href={checksumUrl} rel="noopener">SHA-256 checksum for {PLUGIN_VERSION}</a><span class="small muted">Compare it with the checksum of your downloaded zip.</span></li>
-          <li><a class="link" href={devDownloadUrl()} rel="noopener">Development build</a><span class="small muted">Rebuilt from the main branch. Newest code, least tested.</span></li>
-          <li><a class="link" href={releasesUrl} rel="noopener">All releases</a><span class="small muted">Every tagged version on GitHub. Release files appear there once a version is tagged.</span></li>
-        </ul>
-      </div>
+      <ul role="list" class="reqs" data-reveal="stagger">
+        {reqs.map((r) => (
+          <li class="card"><span class="card-ico"><Icon name={r.icon} size={22} /></span><span class="mono k">{r.k}</span><strong>{r.v}</strong></li>
+        ))}
+      </ul>
+      <p class="small muted">The WordPress minimum comes from the bundled Action Scheduler 4.2.0.</p>
+
+      <ul role="list" class="alt" data-reveal="stagger">
+        <li class="card"><span class="card-ico"><Icon name="scan" size={22} /></span><a class="link" href={checksumUrl} rel="noopener">SHA-256 checksum for {PLUGIN_VERSION}</a><span class="small muted">Compare it with the checksum of your downloaded zip.</span></li>
+        <li class="card"><span class="card-ico"><Icon name="bolt" size={22} /></span><a class="link" href={devDownloadUrl()} rel="noopener">Development build</a><span class="small muted">Rebuilt from the main branch. Newest code, least tested.</span></li>
+        <li class="card"><span class="card-ico"><Icon name="archive" size={22} /></span><a class="link" href={releasesUrl} rel="noopener">All releases</a><span class="small muted">Every tagged version on GitHub.</span></li>
+      </ul>
     </div>
   </section>
 
-  <section class="section section--surface">
-    <div class="container two">
-      <div class="stack">
-        <h2 class="sec-title">Requirements</h2>
-        <dl class="reqs">
-          <div><dt>WordPress</dt><dd>6.5 or newer</dd></div>
-          <div><dt>PHP</dt><dd>7.4 or newer</dd></div>
-          <div><dt>Cost</dt><dd>Free, with no paid tiers</dd></div>
-        </dl>
-        <p class="small muted">The WordPress minimum comes from the bundled Action Scheduler 4.2.0.</p>
+  <section class="section band-dark">
+    <div class="container stack-lg">
+      <div class="sec-head">
+        <p class="eyebrow" data-reveal>Install</p>
+        <h2 class="sec-title" data-reveal>Five steps, no terminal</h2>
       </div>
-      <div class="stack-lg">
-        <h2 class="sec-title">Install in five steps</h2>
-        <ol role="list" class="steps">
-          {steps.map((s, i) => (
-            <li class="step">
-              <span class="step-n" aria-hidden="true">{i + 1}</span>
-              <div>
-                <h3>{s.name}</h3>
-                <p class="muted">{s.text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
+      <ol role="list" class="steps" data-reveal="stagger">
+        {steps.map((s, i) => (
+          <li class="card step">
+            <span class="step-n numeral" aria-hidden="true">{i + 1}</span>
+            <h3>{s.name}</h3>
+            <p>{s.text}</p>
+          </li>
+        ))}
+      </ol>
     </div>
   </section>
 
   <section class="section">
-    <div class="container stack">
-      <h2 class="sec-title">What you will see after installing</h2>
-      <p class="muted">The admin menu, a Back up now page (database and files, ZIP or TAR.GZ, with a choice of destinations), a Destinations page for S3-compatible storage and local folders, a Backups page to download, lock or delete them, and a System Info page. Restore, schedules, retention and Google Drive are not built yet; a backup can only be downloaded and unpacked by hand. Follow progress on the <a class="link" href="/roadmap/">roadmap</a> or the <a class="link" href="/changelog/">changelog</a>.</p>
+    <div class="container after">
+      <div class="stack">
+        <p class="eyebrow" data-reveal>After installing</p>
+        <h2 class="sec-title" data-reveal>What you will see</h2>
+        <ul role="list" class="checks" data-reveal="stagger">
+          <li><Icon name="check" size={20} /><span>Backup Now: database and files, ZIP or TAR.GZ</span></li>
+          <li><Icon name="check" size={20} /><span>Destinations: S3-compatible storage and folders</span></li>
+          <li><Icon name="check" size={20} /><span>Restore: whole site, database or files, with a safety snapshot and Undo</span></li>
+          <li><Icon name="check" size={20} /><span>History: download, lock, delete or restore</span></li>
+          <li><Icon name="check" size={20} /><span>System Info: what your server can do</span></li>
+          <li class="no"><Icon name="dash" size={20} /><span class="muted">Schedules, retention, Google Drive, upload restore and migration are not built yet</span></li>
+        </ul>
+        <p class="small muted">Follow progress on the <a class="link" href="/roadmap/">roadmap</a> or the <a class="link" href="/changelog/">changelog</a>.</p>
+      </div>
+      <figure class="pphone" data-reveal>
+        <div class="pphone-win">
+          <Picture src={shots.phoneForm.src} alt={shots.phoneForm.alt} widths={[390, 780]} sizes="248px" formats={['avif', 'webp']} fallbackFormat="png" loading="lazy" decoding="async" />
+        </div>
+        <figcaption class="pframe-cap mono">As seen in the plugin<span aria-hidden="true"> / </span><span>{shots.phoneForm.caption}</span></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="container stack-lg">
+      <div class="stack"><p class="eyebrow" data-reveal>New in 0.3.0</p><h2 class="sec-title" data-reveal>Restore, from the Restore page</h2><p class="muted">Choose a backup, choose Database only, Files only or Whole site, and read the preview. Try it on a copy of your site first.</p></div>
+      <div class="rframe" data-reveal><ProductFrame {...shots.restoreChoose} sizes="(min-width: 64rem) 720px, 92vw" widths={[480, 800, 1200]} glow={false} /></div>
     </div>
   </section>
 </Base>
 
 <style>
-  .get { display: grid; gap: var(--space-6); align-items: start; }
-  .alt { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
-  .alt li { display: grid; gap: var(--space-1); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
+  .rframe { max-width: 46rem; }
+  .get-cta { margin-top: var(--space-2); }
+  .reqs, .alt, .steps { padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .reqs > li, .alt > li, .steps > li { display: grid; }
+  .reqs .k { color: var(--muted); }
+  .reqs strong { font-family: var(--font-display); font-weight: 400; font-size: clamp(1.75rem, 1.2rem + 1.6vw, 2.5rem); line-height: 1.05; }
   .alt a { justify-self: start; font-weight: 600; }
-
-  .two { display: grid; gap: var(--space-8); }
-  .reqs { display: grid; margin: 0; border-top: 1px solid var(--line-strong); }
-  .reqs div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-2) var(--space-5); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
-  .reqs dt { color: var(--muted); }
-  .reqs dd { margin: 0; font-family: var(--font-display); font-size: var(--step-2); line-height: 1.1; }
-
-  .steps { padding: 0; display: grid; }
-  .step { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: var(--space-4); padding-block: var(--space-5); border-top: 1px solid var(--line-strong); }
-  .step:last-child { border-bottom: 1px solid var(--line-strong); }
-  .step-n { font-family: var(--font-display); font-size: var(--step-3); line-height: 1; color: var(--accent); }
-  .step h3 { font-size: var(--step-1); line-height: 1.25; }
-
-  @media (min-width: 48rem) {
-    .get { grid-template-columns: auto minmax(0, 1fr); gap: var(--space-8); }
-  }
-  @media (min-width: 60rem) {
-    .two { grid-template-columns: 0.8fr 1.2fr; }
-  }
+  .step-n { font-size: clamp(3rem, 2rem + 3vw, 4.5rem); }
+  .step h3 { font-size: var(--step-2); }
+  .after { display: grid; gap: var(--space-8); align-items: center; }
+  .pphone { justify-self: center; }
+  @media (min-width: 48rem) { .reqs, .alt { grid-template-columns: repeat(3, minmax(0, 1fr)); } .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .steps { grid-template-columns: repeat(5, minmax(0, 1fr)); } .after { grid-template-columns: 1.2fr 0.8fr; } }
 </style>

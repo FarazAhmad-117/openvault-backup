@@ -1,6 +1,8 @@
 ---
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
+import Seal from '../components/art/Seal.astro';
+import Icon from '../components/Icon.astro';
 import { siteUrl, repoUrl } from '../config/site';
 import { faqs } from '../data/faq';
 import { faqPage, breadcrumbs } from '../lib/jsonld';
@@ -12,20 +14,21 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'FAQ', path: '/faq/' }];
 <Base title="FAQ" description={description} path="/faq/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="FAQ" path="/faq/" title="Straight answers">
     <p>Short, honest answers. The plugin is pre-alpha, so most of what follows describes how it is designed to work.</p>
+    <div slot="visual" aria-hidden="true"><Seal /></div>
   </PageHead>
 
   <section class="section">
     <div class="container qa-wrap">
-      <ol role="list" class="qa">
+      <div class="acc" data-reveal="stagger">
         {faqs.map((f, i) => (
-          <li class="qa-item" id={`q${i + 1}`}>
-            <span class="n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
-            <h2>{f.q}</h2>
-            <p class="muted">{f.a}</p>
-          </li>
+          <details class="acc-item" id={`q${i + 1}`} data-accordion>
+            <summary data-cursor="Open"><span class="n" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span><h2 class="q">{f.q}</h2><i aria-hidden="true"></i></summary>
+            <p class="a muted">{f.a}</p>
+          </details>
         ))}
-      </ol>
-      <aside class="more panel stack" aria-labelledby="more-title">
+      </div>
+      <aside class="more card" aria-labelledby="more-title" data-reveal>
+        <span class="card-ico"><Icon name="info" size={22} /></span>
         <h2 id="more-title">Not answered here?</h2>
         <p class="muted">Ask in the issue tracker. Questions that come up more than once get added to this page.</p>
         <a class="btn btn--secondary" href={`${repoUrl()}/issues`} rel="noopener">Open an issue</a>
@@ -36,16 +39,9 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'FAQ', path: '/faq/' }];
 
 <style>
   .qa-wrap { display: grid; gap: var(--space-8); }
-  .qa { padding: 0; }
-  .qa-item { display: grid; gap: var(--space-2) var(--space-5); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
-  .qa-item:last-child { border-bottom: 1px solid var(--line-strong); }
-  .n { font-family: var(--font-display); font-size: var(--step-2); color: var(--accent); line-height: 1; }
-  h2 { font-size: var(--step-2); line-height: 1.15; max-width: 28ch; }
+  .acc-item h2.q { font: inherit; letter-spacing: inherit; line-height: inherit; max-width: 28ch; color: inherit; text-wrap: pretty; }
   .more { align-self: start; justify-items: start; }
-  @media (min-width: 48rem) {
-    .qa-item { grid-template-columns: 4rem minmax(0, 1fr); }
-    .qa-item .n { grid-row: 1 / span 2; }
-  }
+  .more h2 { font-size: var(--step-2); }
   @media (min-width: 64rem) {
     .qa-wrap { grid-template-columns: minmax(0, 1fr) 18rem; }
     .more { position: sticky; top: 6rem; }

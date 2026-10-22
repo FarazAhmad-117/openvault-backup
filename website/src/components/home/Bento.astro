@@ -1,0 +1,61 @@
+---
+// Feature bento: mixed-size cards, each with an illustration or a crop of the real screen, one short line and a status badge
+// read from the registry (src/data/features.ts). Illustrations are decorative (aria-hidden); the text carries the meaning.
+import { Picture } from 'astro:assets';
+import StatusBadge from '../StatusBadge.astro';
+import SplitHeading from '../SplitHeading.astro';
+import Parts from '../art/Parts.astro';
+import Seal from '../art/Seal.astro';
+import ShieldLock from '../art/ShieldLock.astro';
+import Folder from '../art/Folder.astro';
+import { statusOf } from '../../lib/registry';
+import { shots } from '../../data/product';
+
+const cards = [
+  { cls: 'b-4 tall', title: 'Pick what goes in', text: 'Database, plugins, themes, uploads. Core files and wp-config.php stay off unless you ask.', id: 'backup-manual', shot: shots.cropWhat, size: '(min-width: 64rem) 640px, 92vw' },
+  { cls: 'b-2', title: 'Split into parts', text: 'ZIP or TAR.GZ in 250 MB parts, so one big site never needs one giant file.', id: 'backup-manual', art: Parts },
+  { cls: 'b-2', title: 'A checksummed manifest', text: 'manifest.json lists every part with its SHA-256.', id: 'backup-manual', art: Seal },
+  { cls: 'b-3', title: 'Restore, with a way back', text: 'A safety snapshot first, a journal of every overwritten file, and Undo. Pre-alpha: try it on a copy.', id: 'restore-in-place', shot: shots.restoreResult, size: '(min-width: 64rem) 480px, 92vw', pos: 'top left', ratio: '16/9' },
+  { cls: 'b-3', title: 'A copy in your own bucket', text: 'S3, R2, B2, Wasabi, Spaces or a custom endpoint.', id: 'destination-s3', shot: shots.cropDestination, size: '(min-width: 64rem) 480px, 92vw', pos: 'top left', ratio: '16/9' },
+  { cls: 'b-3', title: 'Download, lock, delete', text: 'Authenticated downloads only. Never a public URL.', id: 'backup-manage', shot: shots.cropHistory, size: '(min-width: 64rem) 480px, 92vw', pos: 'top left', ratio: '16/9' },
+  { cls: 'b-2', title: 'Keys stay encrypted', text: 'Secret keys are encrypted at rest and never shown again.', id: 'destination-s3', art: ShieldLock },
+  { cls: 'b-2', title: 'A folder works too', text: 'Keep a second copy in any folder on your server.', id: 'destination-local', art: Folder },
+  { cls: 'b-2', title: 'Know your host first', text: 'System Info lists limits, extensions and archive formats.', id: 'admin-and-system-info', shot: shots.system, size: '(min-width: 64rem) 360px, 92vw', pos: 'top left', ratio: '16/10' },
+];
+---
+
+<section class="section" aria-labelledby="bento-h">
+  <div class="container">
+    <div class="sec-head">
+      <p class="eyebrow" data-reveal>What is inside</p>
+      <SplitHeading id="bento-h" class="h-xl" lines={['Small, sharp,', 'and honest.']} />
+    </div>
+    <ul role="list" class="bento" data-reveal="stagger">
+      {cards.map((c) => (
+        <li class={c.cls}>
+          <article class="card">
+            {c.shot && (
+              <div class="crop">
+                <Picture src={c.shot.src} alt={c.shot.alt} widths={[480, 800, 1200]} sizes={c.size} formats={['avif', 'webp']} fallbackFormat="png" loading="lazy" decoding="async" style={c.ratio ? `aspect-ratio:${c.ratio};object-fit:cover;object-position:${c.pos}` : undefined} />
+              </div>
+            )}
+            {c.art && <div class="art-wrap" aria-hidden="true"><c.art /></div>}
+            <div class="meta"><h3>{c.title}</h3><StatusBadge status={statusOf(c.id)} /></div>
+            <p>{c.text}</p>
+          </article>
+        </li>
+      ))}
+    </ul>
+    <p class="note mono">Screens are real: the plugin admin on a demo site. S3 has been verified live against one server (SeaweedFS).</p>
+  </div>
+</section>
+
+<style>
+  .card { height: 100%; }
+  .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+  .meta h3 { font-size: clamp(1.4rem, 1.15rem + 0.9vw, 1.85rem); }
+  .crop { border: 1px solid var(--line-strong); border-radius: 10px; overflow: hidden; background: #f0f0f1; margin: calc(var(--space-5) * -1) calc(var(--space-5) * -1) var(--space-2); border-width: 0 0 1px; border-radius: 0; }
+  .crop :global(img) { width: 100%; height: auto; }
+  .tall .crop :global(img) { height: auto; }
+  .note { margin-top: var(--space-5); color: var(--muted); max-width: none; text-transform: none; letter-spacing: 0.02em; }
+</style>

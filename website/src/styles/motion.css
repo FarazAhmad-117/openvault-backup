@@ -1,0 +1,193 @@
+/*
+ * OpenVault motion system (shared by every page). Conventions are documented in website/README.md.
+ *
+ * RULES
+ *  - Anything hidden-until-reveal lives under `html.js` AND inside `@media (prefers-reduced-motion: no-preference)`.
+ *    Without JavaScript (no `js` class) or with reduced motion, all content is simply visible.
+ *  - Only transform/opacity are animated. No layout properties (CLS stays 0).
+ *  - Timings must match src/lib/motion.ts TIMING.
+ */
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: optional;
+  src: url('../../node_modules/@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff2') format('woff2');
+}
+
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-io: cubic-bezier(0.76, 0, 0.24, 1);
+  --dim: #7d8088;
+  --glow: rgb(224 164 88 / 0.14);
+}
+
+/* ---------- atmosphere: film grain (static tile, cheap) ---------- */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .8 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* ---------- typography helpers ---------- */
+.mono, .eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.5;
+}
+.eyebrow { color: var(--accent); display: inline-flex; align-items: center; gap: 0.75em; }
+.eyebrow::before { content: ''; width: 2rem; height: 1px; background: currentColor; }
+main:focus { outline: none; }
+
+/* split headlines: author each line as <span class="ln"><span class="ln-i">text</span></span> (SplitHeading.astro does it) */
+.ln { display: block; overflow: hidden; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+.ln-i { display: block; }
+
+/* link underline that draws in */
+.link, .prose a, .u-draw {
+  text-decoration: none;
+  background:
+    linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat,
+    linear-gradient(color-mix(in srgb, currentColor 38%, transparent), color-mix(in srgb, currentColor 38%, transparent)) 0 100% / 100% 1px no-repeat;
+  padding-bottom: 0.12em;
+  transition: background-size 0.5s var(--ease-out), color 0.2s var(--ease);
+}
+.link:hover, .link:focus-visible, .prose a:hover, .prose a:focus-visible, .u-draw:hover, .u-draw:focus-visible {
+  background-size: 100% 1px, 100% 1px;
+}
+.u-draw { color: inherit; }
+
+/* ---------- reveals (IntersectionObserver adds .is-in) ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  html.js [data-reveal]:not([data-reveal='lines']) {
+    transition: opacity 0.9s var(--ease-out) calc(var(--d, 0) * 1ms), transform 1.1s var(--ease-out) calc(var(--d, 0) * 1ms);
+  }
+  html.js [data-reveal='fade-up']:not(.is-in), html.js [data-reveal='']:not(.is-in) { opacity: 0; transform: translate3d(0, 2rem, 0); }
+  html.js [data-reveal='fade']:not(.is-in) { opacity: 0; }
+  html.js [data-reveal='draw'] { transform-origin: left center; }
+  html.js [data-reveal='draw']:not(.is-in) { transform: scaleX(0); }
+  html.js [data-reveal='stagger'] > * {
+    transition: opacity 0.9s var(--ease-out) calc(var(--d, 0) * 1ms + var(--i, 0) * 90ms), transform 1.1s var(--ease-out) calc(var(--d, 0) * 1ms + var(--i, 0) * 90ms);
+  }
+  html.js [data-reveal='stagger']:not(.is-in) > * { opacity: 0; transform: translate3d(0, 1.75rem, 0); }
+  html.js [data-reveal='lines'] .ln-i {
+    transition: transform 1.15s var(--ease-out) calc(var(--d, 0) * 1ms + var(--i, 0) * 100ms);
+  }
+  html.js [data-reveal='lines']:not(.is-in) .ln-i { transform: translate3d(0, 108%, 0); }
+
+  /* above-the-fold lines: pure CSS so they never wait for JavaScript; held until the preloader opens */
+  html.js [data-reveal-now='lines'] .ln-i {
+    animation: ln-up 1.2s var(--ease-out) calc(var(--pl-wait, 0s) + 0.1s + var(--i, 0) * 0.11s) both;
+  }
+  html.js [data-reveal-now='fade'] { animation: fade-up 1s var(--ease-out) calc(var(--pl-wait, 0s) + 0.1s + var(--i, 0) * 0.11s) both; }
+}
+@keyframes ln-up { from { transform: translate3d(0, 108%, 0); } }
+@keyframes fade-up { from { opacity: 0; transform: translate3d(0, 1.5rem, 0); } }
+
+/* ---------- preloader (CSS timeline, 1.6 s; JS only adds skip + focus clean-up) ---------- */
+@property --pl-n { syntax: '<integer>'; inherits: false; initial-value: 0; }
+.preloader { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  html.preloading { --pl-wait: 1.05s; }
+  html.preloading.pl-skipped { --pl-wait: 0s; }
+  html.preloading .preloader {
+    display: grid;
+    position: fixed;
+    inset: 0;
+    z-index: 300;
+    place-items: center;
+    animation: pl-gone 0s linear 1.6s forwards;
+  }
+  html.preloading.pl-skipped .preloader { display: none; }
+}
+@keyframes pl-gone { to { visibility: hidden; pointer-events: none; } }
+.pl-panel { position: absolute; left: 0; right: 0; height: 50.2%; background: var(--bg); will-change: transform; }
+.pl-top { top: 0; border-bottom: 1px solid var(--accent); animation: pl-top 0.5s var(--ease-io) 1.05s both; }
+.pl-bot { bottom: 0; animation: pl-bot 0.5s var(--ease-io) 1.05s both; }
+@keyframes pl-top { to { transform: translate3d(0, -101%, 0); } }
+@keyframes pl-bot { to { transform: translate3d(0, 101%, 0); } }
+.pl-core {
+  position: relative; display: grid; justify-items: center; gap: 1.25rem;
+  animation: pl-core-in 0.3s ease-out both, pl-core-out 0.22s ease-in 0.95s forwards;
+}
+@keyframes pl-core-in { from { opacity: 0; } }
+@keyframes pl-core-out { to { opacity: 0; transform: scale(1.06); } }
+.pl-dial { width: min(46vw, 11rem); height: auto; overflow: visible; }
+.pl-dial .ring { fill: none; stroke: var(--line-strong); stroke-width: 1.2; }
+.pl-dial .ticks { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: pl-sweep 0.8s var(--ease-out) 0.1s forwards; }
+.pl-dial .spin { transform-box: view-box; transform-origin: 50% 50%; animation: pl-spin 1s cubic-bezier(0.2, 0.8, 0.2, 1) 0.05s both; }
+.pl-dial .ptr { fill: var(--accent); }
+.pl-dial .lock { fill: none; stroke: var(--accent); stroke-width: 2.5; opacity: 0; animation: pl-lock 0.35s ease-out 0.88s both; }
+@keyframes pl-sweep { to { stroke-dashoffset: 0; } }
+@keyframes pl-spin { from { transform: rotate(-200deg); } 82% { transform: rotate(10deg); } to { transform: rotate(0); } }
+@keyframes pl-lock { 0% { opacity: 1; transform: scale(0.9); } 100% { opacity: 0; transform: scale(1.18); } }
+.pl-dial .lock { transform-box: view-box; transform-origin: 50% 50%; }
+.pl-count {
+  display: flex; align-items: baseline; gap: 0.5rem; margin: 0; font-family: var(--font-mono); letter-spacing: 0.1em; color: var(--text);
+}
+.pl-n { display: inline-block; min-width: 3ch; text-align: right; font-size: 1.5rem; animation: pl-count 0.95s cubic-bezier(0.3, 0.6, 0.3, 1) 0.05s forwards; counter-reset: pl var(--pl-n); }
+.pl-n::before { content: counter(pl); }
+@keyframes pl-count { to { --pl-n: 100; } }
+.pl-count small { font-size: 0.7rem; color: var(--muted); }
+.pl-name { margin: 0; font-family: var(--font-display); font-size: 1.5rem; line-height: 1; }
+.pl-skip {
+  position: absolute; right: var(--gutter); bottom: var(--gutter); z-index: 2;
+  background: none; border: 1px solid var(--line-strong); color: var(--muted); border-radius: 999px;
+  padding: 0.5rem 1rem; min-height: 2.75rem; font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.14em; text-transform: uppercase; cursor: pointer;
+}
+.pl-skip:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ---------- page transition curtain (driven by src/motion/transitions.ts) ---------- */
+.curtain { position: fixed; inset: 0; z-index: 250; display: flex; pointer-events: none; visibility: hidden; }
+.curtain.is-on { visibility: visible; pointer-events: auto; }
+.curtain i { flex: 1; background: linear-gradient(180deg, var(--accent), #c98a3c); transform: scaleY(0); will-change: transform; border-right: 1px solid rgb(26 18 6 / 0.25); }
+.curtain i:last-child { border-right: 0; }
+@media (prefers-reduced-motion: reduce) { .curtain { display: none; } }
+/* the swap itself must be instant: the curtain is the transition */
+::view-transition-group(root), ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+
+/* ---------- cursor follower (fine pointers only; the system cursor is never hidden) ---------- */
+.cursor { display: none; }
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  html.js .cursor {
+    display: grid; place-items: center; position: fixed; left: 0; top: 0; z-index: 400; width: 2.25rem; height: 2.25rem; margin: -1.125rem 0 0 -1.125rem;
+    pointer-events: none; opacity: 0; transition: opacity 0.25s;
+  }
+  .cursor.is-on { opacity: 1; }
+  .cursor::before {
+    content: ''; position: absolute; inset: 0.5rem; border-radius: 50%; border: 1px solid var(--accent); background: rgb(224 164 88 / 0.08);
+    transition: transform 0.35s var(--ease-out), background-color 0.3s;
+  }
+  .cursor.is-link::before { transform: scale(1.9); background: rgb(224 164 88 / 0.14); }
+  .cursor.is-label::before { transform: scale(2.7); background: var(--accent); border-color: var(--accent); }
+  .cursor.is-hidden { opacity: 0; }
+  .cursor-label { position: relative; font-family: var(--font-mono); font-size: 0.625rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-ink); opacity: 0; transition: opacity 0.2s; }
+  .cursor.is-label .cursor-label { opacity: 1; }
+}
+
+/* ---------- spotlight hover (pointer.ts sets --mx/--my on [data-spot]) ---------- */
+[data-spot] { position: relative; isolation: isolate; }
+[data-spot]::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; opacity: 0; pointer-events: none; transition: opacity 0.4s;
+  background: radial-gradient(22rem circle at var(--mx, 50%) var(--my, 50%), rgb(224 164 88 / 0.13), transparent 70%);
+}
+@media (hover: hover) { [data-spot]:hover::before { opacity: 1; } }
+
+[data-magnetic] { will-change: transform; }
+.btn[data-magnetic] { transition: transform 0.35s var(--ease-out), background-color 0.2s var(--ease), border-color 0.2s var(--ease), color 0.2s var(--ease); }
+
+/* ---------- FAQ / accordion: <details data-accordion> animates where ::details-content is supported ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  @supports selector(::details-content) {
+    details[data-accordion] { interpolate-size: allow-keywords; }
+    details[data-accordion]::details-content { block-size: 0; overflow: clip; transition: block-size 0.45s var(--ease-out), content-visibility 0.45s allow-discrete; }
+    details[data-accordion][open]::details-content { block-size: auto; }
+  }
+}

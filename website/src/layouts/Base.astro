@@ -1,12 +1,22 @@
 ---
+import { ClientRouter } from 'astro:transitions';
 import displayFont from '@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff2?url';
+import bodyFont from '@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url';
+import monoFont from '@fontsource/geist-mono/files/geist-mono-latin-400-normal.woff2?url';
 import '../styles/fonts.css';
 import '../styles/global.css';
+import '../styles/motion.css';
+import '../styles/pages.css';
+import '../styles/product.css';
 import Seo from '../components/Seo.astro';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import Announce from '../components/Announce.astro';
+import Preloader from '../components/Preloader.astro';
+import Overlays from '../components/Overlays.astro';
 import { isConfiguredSite } from '../config/site';
 import { buildTitle, shouldNoindex } from '../lib/seo';
+import { BOOT_SCRIPT } from '../lib/motion';
 
 interface Props {
   title?: string;
@@ -14,9 +24,10 @@ interface Props {
   path: string;
   jsonLd?: object[];
   noindex?: boolean;
+  announce?: boolean;
 }
 
-const { title, description, path, jsonLd = [], noindex = false } = Astro.props;
+const { title, description, path, jsonLd = [], noindex = false, announce = false } = Astro.props;
 const finalNoindex = shouldNoindex(noindex, isConfiguredSite());
 ---
 
@@ -27,15 +38,27 @@ const finalNoindex = shouldNoindex(noindex, isConfiguredSite());
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#07080a" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <link rel="preload" as="font" type="font/woff2" href={displayFont} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={bodyFont} crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href={monoFont} crossorigin />
+    <script is:inline set:html={BOOT_SCRIPT} />
     <Seo title={buildTitle(title)} description={description} path={path} noindex={finalNoindex} jsonLd={jsonLd} />
+    <ClientRouter fallback="swap" />
   </head>
-  <body>
+  <body id="top">
+    <Preloader />
     <a class="skip-link" href="#main">Skip to content</a>
+    {announce && <Announce />}
     <Header current={path} />
     <main id="main" tabindex="-1">
       <slot />
     </main>
     <Footer />
+    <Overlays />
+    <script>
+      import '../motion/init';
+    </script>
   </body>
 </html>

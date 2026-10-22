@@ -1,30 +1,72 @@
 ---
 import Base from '../layouts/Base.astro';
+import SplitHeading from '../components/SplitHeading.astro';
+import VaultDial from '../components/VaultDial.astro';
 
 const description = 'That page could not be found. Head back to the OpenVault Backup home page, features, download or docs.';
 const links = [
-  { href: '/', text: 'Home' },
-  { href: '/features/', text: 'Features' },
-  { href: '/download/', text: 'Download' },
-  { href: '/docs/', text: 'Docs' },
+  { href: '/', text: 'Home', hint: 'Back to the front door' },
+  { href: '/features/', text: 'Features', hint: 'The ledger, with real statuses' },
+  { href: '/download/', text: 'Download', hint: 'The pre-alpha zip' },
+  { href: '/docs/', text: 'Docs', hint: 'Setup guide outlines' },
 ];
 ---
 
 <Base title="Page not found" description={description} path="/404/" noindex>
-  <section class="section">
-    <div class="container stack-lg">
-      <p class="code" aria-hidden="true">404</p>
-      <h1>This page is not in the vault.</h1>
-      <p class="lede">The link may be old or mistyped. Try one of these instead.</p>
-      <ul role="list" class="cluster">
-        {links.map((l) => <li><a class="btn btn--secondary" href={l.href}>{l.text}</a></li>)}
+  <section class="lost">
+    <div class="glow" aria-hidden="true"></div>
+    <div class="container lost-grid">
+      <div class="stack-lg">
+        <p class="eyebrow" data-reveal-now="fade" style="--i:0">Error 404 &middot; locked out</p>
+        <SplitHeading as="h1" now class="h1" lines={['This page is', 'not in the vault.']} />
+        <p class="lede" data-reveal-now="fade" style="--i:3">The link may be old or mistyped. Spin the dial or pick a door below.</p>
+      </div>
+      <div class="dial-wrap" aria-hidden="true">
+        <VaultDial class="dial" />
+        <span class="four numeral">404</span>
+      </div>
+    </div>
+    <div class="container">
+      <ul role="list" class="doors rows" data-reveal="stagger">
+        {links.map((l, i) => (
+          <li data-spot>
+            <a href={l.href} data-cursor="Open"><span class="mono">0{i + 1}</span><span class="t">{l.text}</span><span class="muted small">{l.hint}</span><span class="arr" aria-hidden="true">&rarr;</span></a>
+          </li>
+        ))}
       </ul>
     </div>
   </section>
 </Base>
 
 <style>
-  .code { font-family: var(--font-display); font-size: var(--step-5); color: var(--accent); line-height: 1; }
-  h1 { font-size: var(--step-4); max-width: 18ch; }
-  ul { padding: 0; }
+  .lost { position: relative; isolation: isolate; overflow: clip; padding-block: var(--space-8) var(--space-9); }
+  .glow { position: absolute; inset: 0; z-index: -1; background: radial-gradient(40rem 30rem at 78% 30%, rgb(224 164 88 / 0.14), transparent 70%); }
+  .lost-grid { display: grid; gap: var(--space-7); align-items: center; margin-bottom: var(--space-8); }
+  :global(.lost .h1) { font-size: clamp(2.75rem, 1rem + 7vw, 7.5rem); line-height: 0.96; letter-spacing: -0.03em; max-width: none; text-wrap: initial; }
+  .dial-wrap { position: relative; justify-self: center; width: min(100%, 26rem); }
+  :global(.dial) { width: 100%; height: auto; overflow: visible; }
+  :global(.dial .ring) { fill: none; stroke: var(--line-strong); stroke-width: 0.8; }
+  :global(.dial .ticks) { fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; }
+  :global(.dial .lock) { fill: none; stroke: var(--warn); stroke-width: 0.8; opacity: 0.5; }
+  :global(.dial .ptr) { fill: var(--accent); }
+  :global(.dial .spin) { transform-box: view-box; transform-origin: 50% 50%; }
+  .four { position: absolute; inset: 0; display: grid; place-items: center; font-size: clamp(3.5rem, 2rem + 6vw, 7rem); color: var(--text); opacity: 0.9; pointer-events: none; }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.dial .spin) { animation: wobble 7s var(--ease-io) infinite alternate; }
+    :global(.dial .lock) { animation: knock 3.5s ease-in-out infinite; }
+  }
+  @keyframes wobble { from { transform: rotate(-70deg); } 55% { transform: rotate(40deg); } to { transform: rotate(-12deg); } }
+  @keyframes knock { 0%, 70%, 100% { opacity: 0.25; } 80% { opacity: 0.9; } }
+  .doors { padding: 0; }
+  .doors a { display: grid; grid-template-columns: 3rem 1fr auto; align-items: baseline; gap: var(--space-2) var(--space-4); padding-block: var(--space-5); text-decoration: none; background: none; }
+  .doors .mono { color: var(--accent); }
+  .doors .t { font-family: var(--font-display); font-size: clamp(2rem, 1rem + 4vw, 4.5rem); line-height: 1; letter-spacing: -0.02em; }
+  .doors .muted { display: none; grid-column: 2; }
+  .doors .arr { font-size: 1.5rem; color: var(--accent); }
+  .doors a:hover .t, .doors a:focus-visible .t { color: var(--accent); }
+  @media (min-width: 48rem) {
+    .doors a { grid-template-columns: 4rem 1fr 18rem auto; }
+    .doors .muted { display: block; grid-column: auto; }
+  }
+  @media (min-width: 60rem) { .lost-grid { grid-template-columns: 1.2fr 0.8fr; } }
 </style>

@@ -31,6 +31,7 @@ use OpenVault\Backup\Core\Capabilities;
 use OpenVault\Backup\Database\BackupFilesRepository;
 use OpenVault\Backup\Database\BackupsRepository;
 use OpenVault\Backup\Database\DestinationsRepository;
+use OpenVault\Backup\Database\RestoresRepository;
 use OpenVault\Backup\Destinations\DestinationRegistry;
 use OpenVault\Backup\Engine\JobLock;
 use OpenVault\Backup\Engine\JobRunner;
@@ -553,6 +554,12 @@ class RestController {
 					409,
 					array( 'backup_id' => (int) $running[0]['id'] )
 				);
+			}
+
+			// One heavy job at a time: a restore that is queued, running or waiting for its confirmation blocks new backups (a backup
+			// started while a restore waits would make the confirmation fail).
+			if ( array() !== ( new RestoresRepository() )->find_active( 1 ) ) {
+				return self::error( 'ovb_restore_running', __( 'A restore is in progress or waiting for your confirmation. Finish or cancel it first.', 'openvault-backup' ), 409 );
 			}
 
 			$destinations = $request->get_param( 'destinations' );

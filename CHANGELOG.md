@@ -1,7 +1,22 @@
 # Changelog
 
 ## Unreleased
-- Next: restore, then schedules and retention, then Google Drive (see the roadmap).
+- Next: schedules and retention, then Google Drive (see the roadmap).
+
+## 0.3.0 - pre-alpha
+- Restore from history. A new Restore page (and REST API `ovb/v1/restores`) restores a backup of this site from the local copy or any destination. Choose Database only, Files only or Whole site, read the preview (sizes, disk need, warnings, what is never overwritten) and type RESTORE. The backup is downloaded and checksum-verified first, then a second "Apply restore now" confirmation starts the change.
+- Safety: a safety snapshot (a real, locked database backup) is taken before the database is replaced, a rollback journal keeps every overwritten file, and visitors see a 503 maintenance page while admins keep access. The database dump is treated as untrusted and checked line by line against a strict whitelist. Files are extracted safely: no `../`, no symlinks, never into the plugin's own folder, its backup folder, `wp-config.php` or server config files.
+- The plugin's own settings, locks and active state survive a database restore. If the users table is replaced you may be logged out; progress continues on a read-only status link.
+- Undo restore: the database comes back from the snapshot and files from the journal. Undoing the database also discards everything written since the restore. "Dismiss undo data" deletes the snapshot and journal. History gets a Restore action and a banner shows while a restore runs.
+- Website: product-site redesign with real screenshots of the plugin admin (including restore), device frames, an illustration set, a bento home page and a pinned product tour.
+- Pre-alpha: try restore on a copy of your site first. Do not rely on it as your only backup.
+- Limitation: Restore from an uploaded archive or a folder on the server is not built; only backups in your history can be restored.
+- Limitation: No migration. A different table prefix is refused. A different site URL needs an explicit acknowledgement and the restored data keeps the old URLs (search and replace is planned for Phase 3).
+- Limitation: Multisite networks are refused. Encrypted archives do not exist yet.
+- Limitation: Existing files are overwritten and files that are not in the backup are not deleted. `wp-config.php` is never restored.
+- Limitation: Restore of very large sites is slow (a tar.gz part is re-read for every slice).
+- Limitation: Still no schedules, no retention (nothing is deleted automatically, locally or remotely), no Google Drive, no archive encryption, no email notifications, no Settings or Logs page.
+- Limitation: S3 was verified live only against SeaweedFS.
 
 ## 0.2.0 - pre-alpha
 - Everything in the 0.1.0 section below, plus destinations. 0.1.0 was never published as a release; 0.2.0 is the first release that can be downloaded.
@@ -30,7 +45,7 @@
 - Known limits: no restore (a backup can only be downloaded and extracted by hand), no schedules or automatic backups, no retention, no Google Drive, S3-compatible or other remote destinations, no archive encryption, no email notifications, no settings or logs page.
 - Backups are kept in a protected folder on the same server, so they do not protect you if you lose the server. Do not rely on this release as your only backup.
 
-## Development log (milestones behind 0.1.0 and 0.2.0)
+## Development log (milestones behind 0.1.0, 0.2.0 and 0.3.0)
 - Project structure and plan files.
 - Milestone 1 (Foundation): dev tooling (composer scripts, phpcs + WPCS, phpstan, phpunit, wp-env).
 - Bundled Action Scheduler 4.2.0 in `lib/action-scheduler/`.

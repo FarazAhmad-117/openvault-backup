@@ -1,0 +1,32 @@
+---
+// A REAL screenshot of the plugin admin inside a browser-style frame, always with an honest caption.
+// Images come from src/assets/product (see website/README.md: how screenshots are captured and regenerated).
+// Rendered with astro:assets: AVIF + WebP + PNG fallback, width/height set, lazy unless `eager` (the LCP image).
+import { Picture } from 'astro:assets';
+
+interface Props {
+  src: ImageMetadata;
+  alt: string;
+  caption?: string;
+  url?: string;
+  eager?: boolean;
+  sizes?: string;
+  widths?: number[];
+  tilt?: boolean;
+  glow?: boolean;
+  cover?: boolean;
+  ratio?: string;
+  pos?: string;
+  class?: string;
+}
+const { src, alt, caption, url = 'example-site / wp-admin', eager = false, sizes = '(min-width: 64rem) 640px, 92vw', widths = [480, 800, 1200], tilt = false, glow = true, cover = false, ratio, pos = 'top left', class: cls } = Astro.props;
+const style = cover && ratio ? `aspect-ratio:${ratio};object-position:${pos}` : undefined;
+---
+
+<figure class={`pframe ${glow ? 'pframe--glow' : ''} ${tilt ? 'pframe--tilt' : ''} ${cls ?? ''}`} data-scrub={tilt ? 'pass' : undefined}>
+  <div class="pframe-win">
+    <div class="pframe-bar" aria-hidden="true"><i></i><i></i><i></i><span class="pframe-url mono">{url}</span></div>
+    <Picture src={src} alt={alt} widths={widths} sizes={sizes} formats={['avif', 'webp']} fallbackFormat="png" loading={eager ? 'eager' : 'lazy'} fetchpriority={eager ? 'high' : undefined} decoding={eager ? 'sync' : 'async'} class={cover ? 'pframe-img pframe-img--cover' : 'pframe-img'} style={style} />
+  </div>
+  {caption && <figcaption class="pframe-cap mono">As seen in the plugin<span aria-hidden="true"> / </span><span>{caption}</span></figcaption>}
+</figure>

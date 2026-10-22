@@ -1,5 +1,6 @@
 ---
 import { SITE_NAME, PLUGIN_VERSION } from '../config/site';
+import { isCurrentPath } from '../lib/motion';
 
 interface Props { current?: string }
 const { current = '' } = Astro.props;
@@ -11,13 +12,14 @@ const nav = [
   { href: '/compare/', text: 'Compare' },
   { href: '/docs/', text: 'Docs' },
 ];
-const isCurrent = (href: string) => current !== '' && (current === href || current.startsWith(href));
+const cur = (href: string) => (isCurrentPath(current, href) ? 'page' : undefined);
 const preAlpha = PLUGIN_VERSION.startsWith('0.');
 ---
 
-<header class="site-header">
+<!-- Persistent across client-side navigations (transition:persist); src/motion/header.ts keeps aria-current in sync. -->
+<header class="site-header" data-header transition:persist="site-header">
   <div class="container bar">
-    <a class="brand" href="/" aria-label={`${SITE_NAME} home`} aria-current={current === '/' ? 'page' : undefined}>
+    <a class="brand" href="/" data-nav aria-label={`${SITE_NAME} home`} aria-current={cur('/')}>
       <svg class="mark" viewBox="0 0 32 32" width="28" height="28" aria-hidden="true" focusable="false">
         <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="1.5" />
         <g stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -33,73 +35,123 @@ const preAlpha = PLUGIN_VERSION.startsWith('0.');
     {preAlpha && <span class="pill">Pre-alpha</span>}
 
     <nav class="nav-desktop" aria-label="Primary">
-      <ul role="list">
-        {nav.map((n) => (
-          <li><a href={n.href} aria-current={isCurrent(n.href) ? 'page' : undefined}>{n.text}</a></li>
-        ))}
-      </ul>
-      <a class="btn btn--primary btn--sm" href="/download/" aria-current={isCurrent('/download/') ? 'page' : undefined}>Download</a>
-    </nav>
-
-    <details class="nav-mobile">
-      <summary>
-        <span class="visually-hidden">Menu</span>
-        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
-          <path class="bars" d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none" />
-        </svg>
-      </summary>
-      <nav class="sheet" aria-label="Primary mobile">
+      <div class="nav-links">
         <ul role="list">
           {nav.map((n) => (
-            <li><a href={n.href} aria-current={isCurrent(n.href) ? 'page' : undefined}>{n.text}</a></li>
+            <li><a href={n.href} data-nav aria-current={cur(n.href)}>{n.text}</a></li>
           ))}
         </ul>
-        <a class="btn btn--primary" href="/download/">Download</a>
-      </nav>
-    </details>
+        <span class="nav-ind" aria-hidden="true"></span>
+      </div>
+      <a class="btn btn--primary btn--sm" href="/download/" data-nav aria-current={cur('/download/')}>Download</a>
+    </nav>
+
+    <button class="menu-btn" type="button" data-menu-btn aria-expanded="false" aria-controls="menu" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+        <path class="l1" d="M4 9h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none" />
+        <path class="l2" d="M4 15h16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" fill="none" />
+      </svg>
+    </button>
+  </div>
+
+  <div class="menu" id="menu">
+    <nav aria-label="Primary mobile">
+      <p class="mono menu-label" aria-hidden="true">Navigate</p>
+      <ul role="list">
+        {nav.map((n, i) => (
+          <li style={`--i:${i}`}><a href={n.href} data-nav aria-current={cur(n.href)}><span class="mono n" aria-hidden="true">0{i + 1}</span>{n.text}</a></li>
+        ))}
+      </ul>
+      <a class="btn btn--primary menu-cta" href="/download/" data-nav aria-current={cur('/download/')} style={`--i:${nav.length}`}>Download</a>
+    </nav>
   </div>
 </header>
 
 <style>
-  .site-header { position: sticky; top: 0; z-index: 50; background: rgb(7 8 10 / 0.92); border-bottom: 1px solid var(--line); }
-  .bar { display: flex; align-items: center; gap: var(--space-4); min-height: 4rem; }
-  .brand { display: inline-flex; align-items: center; gap: 0.6rem; color: var(--accent); text-decoration: none; }
+  .site-header {
+    position: sticky; top: 0; z-index: 200;
+    transition: transform 0.5s var(--ease-out);
+  }
+  /* the blur lives on a pseudo-element: backdrop-filter on the header itself would trap the fixed mobile menu */
+  .site-header::before {
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; opacity: 0; transition: opacity 0.4s;
+    background: rgb(7 8 10 / 0.7); border-bottom: 1px solid var(--line); -webkit-backdrop-filter: blur(16px) saturate(1.3); backdrop-filter: blur(16px) saturate(1.3);
+  }
+  .site-header.is-solid::before, :global(html:not(.js)) .site-header::before { opacity: 1; }
+  .site-header[data-hidden] { transform: translateY(-101%); }
+  .bar { position: relative; z-index: 2; display: flex; align-items: center; gap: var(--space-4); min-height: 4rem; }
+  .brand { display: inline-flex; align-items: center; gap: 0.6rem; color: var(--accent); text-decoration: none; background: none; }
   .brand:hover { color: var(--accent-hover); }
+  .mark { transition: transform 0.9s var(--ease-out); }
+  .brand:hover .mark { transform: rotate(120deg); }
   .word { font-family: var(--font-display); font-size: 1.65rem; line-height: 1; color: var(--text); letter-spacing: -0.01em; }
   .pill {
-    font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; color: var(--warn);
+    font-family: var(--font-mono); font-size: 0.6875rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--warn);
     border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: 999px;
-    padding: 0.1rem 0.6rem; white-space: nowrap;
+    padding: 0.15rem 0.65rem; white-space: nowrap;
   }
   .nav-desktop { margin-left: auto; display: none; align-items: center; gap: var(--space-6); }
-  .nav-desktop ul { display: flex; gap: var(--space-5); padding: 0; }
-  .nav-desktop li a { text-decoration: none; color: var(--muted); font-size: var(--step--1); font-weight: 500; padding-block: 0.4rem; border-bottom: 1px solid transparent; }
-  .nav-desktop li a:hover { color: var(--text); }
+  .nav-links { position: relative; }
+  .nav-links ul { display: flex; gap: var(--space-5); padding: 0; }
+  .nav-links li a { display: block; text-decoration: none; color: var(--muted); font-size: var(--step--1); font-weight: 500; padding-block: 0.5rem; background: none; }
+  .nav-links li a:hover { color: var(--text); }
   a[aria-current='page']:not(.btn) { color: var(--text); }
-  .nav-desktop li a[aria-current='page'] { border-bottom-color: var(--accent); }
+  .nav-links li a[aria-current='page'] { box-shadow: 0 1px 0 var(--accent); }
+  .nav-ind { display: none; }
+  :global(html.js) .nav-links li a[aria-current='page'] { box-shadow: none; }
+  :global(html.js) .nav-ind {
+    display: block; position: absolute; left: 0; bottom: 0; height: 1px; width: 1px; transform-origin: 0 50%; background: var(--accent);
+    transform: translateX(var(--x, 0px)) scaleX(var(--w, 0)); opacity: 0;
+    transition: transform 0.5s var(--ease-out), opacity 0.3s;
+  }
+  :global(html.js) .nav-ind.on { opacity: 1; }
 
-  .nav-mobile { margin-left: auto; }
-  .nav-mobile summary {
-    list-style: none; cursor: pointer; display: grid; place-items: center;
-    width: 2.75rem; height: 2.75rem; border: 1px solid var(--muted); border-radius: 999px; color: var(--text);
+  /* mobile: without JS the links sit in a wrapped row under the bar; with JS they become a full-screen overlay */
+  .menu-btn { display: none; margin-left: auto; place-items: center; width: 2.75rem; height: 2.75rem; border: 1px solid var(--line-strong); border-radius: 999px; background: none; color: var(--text); cursor: pointer; }
+  .menu-btn:hover, .menu-open .menu-btn { border-color: var(--accent); color: var(--accent); }
+  .menu-btn path { transform-box: view-box; transform-origin: 50% 50%; transition: transform 0.45s var(--ease-out); }
+  .menu-open .l1 { transform: translateY(3px) rotate(45deg); }
+  .menu-open .l2 { transform: translateY(-3px) rotate(-45deg); }
+  .menu { border-top: 1px solid var(--line); padding: var(--space-2) var(--gutter) var(--space-4); background: var(--bg); }
+  .menu nav { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-5); align-items: center; }
+  .menu-label { display: none; }
+  .menu ul { display: contents; }
+  .menu li a { display: inline-block; padding: 0.5rem 0; text-decoration: none; background: none; font-size: var(--step--1); }
+  .menu .n { display: none; }
+  .menu-cta { margin-left: auto; }
+
+  :global(html.js) .menu-btn { display: grid; }
+  :global(html.js) .menu {
+    position: fixed; inset: 0; z-index: 1; padding: 6rem var(--gutter) var(--space-6); border: 0; overflow-y: auto;
+    visibility: hidden; clip-path: circle(0 at calc(100% - 2.75rem) 2.25rem);
+    transition: clip-path 0.7s var(--ease-io), visibility 0s 0.7s;
   }
-  .nav-mobile summary::-webkit-details-marker { display: none; }
-  .nav-mobile summary:hover { border-color: var(--accent); color: var(--accent); }
-  .nav-mobile[open] summary { border-color: var(--accent); color: var(--accent); }
-  .sheet {
-    position: absolute; left: 0; right: 0; top: 100%; background: var(--surface);
-    border-bottom: 1px solid var(--line); padding: var(--space-4) var(--gutter) var(--space-6);
-    display: grid; gap: var(--space-4); box-shadow: 0 24px 40px -16px rgb(0 0 0 / 0.8);
+  :global(html.js) .menu-open .menu { visibility: visible; clip-path: circle(150vmax at calc(100% - 2.75rem) 2.25rem); transition: clip-path 0.8s var(--ease-io), visibility 0s; }
+  :global(html.js) .menu nav { display: grid; align-content: start; gap: 0; min-height: 100%; }
+  :global(html.js) .menu-label { display: block; color: var(--muted); margin-bottom: var(--space-3); }
+  :global(html.js) .menu ul { display: grid; padding: 0; }
+  :global(html.js) .menu li a {
+    display: flex; align-items: baseline; gap: var(--space-4); padding: 0.55rem 0; border-bottom: 1px solid var(--line);
+    font-family: var(--font-display); font-size: clamp(2.25rem, 9vw, 3.75rem); line-height: 1.05; letter-spacing: -0.015em;
   }
-  .sheet ul { padding: 0; display: grid; }
-  .sheet li a { display: block; padding: 0.85rem 0; border-bottom: 1px solid var(--line); text-decoration: none; font-size: var(--step-1); font-family: var(--font-display); }
-  .sheet .btn { justify-self: stretch; }
+  :global(html.js) .menu li a:hover { color: var(--accent); }
+  :global(html.js) .menu .n { display: inline; color: var(--accent); }
+  :global(html.js) .menu-cta { justify-self: stretch; margin: var(--space-5) 0 0; }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.js) .menu li, :global(html.js) .menu-cta { opacity: 0; transform: translateY(1.5rem); transition: opacity 0.4s, transform 0.4s var(--ease-out); }
+    :global(html.js) .menu-open .menu li, :global(html.js) .menu-open .menu-cta { opacity: 1; transform: none; transition: opacity 0.7s var(--ease-out) calc(0.25s + var(--i) * 60ms), transform 0.8s var(--ease-out) calc(0.25s + var(--i) * 60ms); }
+  }
+  :global(html.menu-open) { overflow: hidden; }
 
   @media (min-width: 56rem) {
     .nav-desktop { display: flex; }
-    .nav-mobile { display: none; }
+    .menu-btn, :global(html.js) .menu-btn { display: none; }
+    .menu, :global(html.js) .menu { display: none; }
   }
   @media (max-width: 22rem) {
     .pill { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    :global(html.js) .menu, :global(html.js) .menu-open .menu { transition: none; }
   }
 </style>

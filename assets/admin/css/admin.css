@@ -272,3 +272,61 @@
 	min-width: 0;
 	box-sizing: border-box;
 }
+
+/* Restore: the danger panel, the backup choices and the banner. */
+.ovb-danger {
+	margin: 16px 0;
+	padding: 4px 16px 12px;
+	background: #fcf0f1;
+	border: 1px solid #b32d2e;
+	border-left-width: 6px;
+}
+
+.ovb-danger h3 {
+	margin-top: 12px;
+	color: #8a2424;
+}
+
+.ovb-backup-choice .ovb-help {
+	overflow-wrap: anywhere;
+}
+
+.ovb-mode-reason {
+	color: #8a2424;
+	font-weight: 600;
+}
+
+.ovb-mode-reason:empty {
+	display: none;
+}
+
+#ovb-rs-list {
+	max-height: 420px;
+	overflow-y: auto;
+}
+
+#ovb-ready-phrase,
+#ovb-pv-phrase,
+#ovb-undo-phrase {
+	max-width: 100%;
+}
+
+.ovb-restore-banner a {
+	font-weight: 600;
+}
+
+@media (max-width: 600px) {
+	.ovb-panel,
+	.ovb-fieldset {
+		padding-left: 12px;
+		padding-right: 12px;
+	}
+
+	.ovb-help {
+		margin-left: 0;
+	}
+
+	.ovb-bar-row {
+		flex-wrap: wrap;
+	}
+}

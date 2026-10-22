@@ -1,0 +1,75 @@
+---
+// Three principles as oversized statements. The text fills with colour as it scrolls through the viewport (--p, data-scrub="pass").
+import StatusBadge from '../StatusBadge.astro';
+import { statusOf } from '../../lib/registry';
+
+const principles = [
+  {
+    title: 'Your credentials.',
+    text: 'You connect your own S3 keys today, and your own Google OAuth app once Google Drive is built. Tokens and data travel only between your site and your storage. There are no relay servers.',
+    badges: [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3']],
+  },
+  {
+    title: 'Built for cheap hosting.',
+    text: 'Everything long-running is designed to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory.',
+    badges: [['Backups', 'backup-manual']],
+  },
+  {
+    title: 'Restore you can trust.',
+    text: 'Archives carry checksums and are verified before anything changes. A restore takes a safety snapshot first, keeps a journal of every file it overwrites and protects the plugin itself, so Undo can bring your site back. Pre-alpha: try it on a copy first.',
+    badges: [['Restore', 'restore-in-place']],
+  },
+] as const;
+---
+
+<section class="section manifesto" aria-labelledby="manifesto-h">
+  <div class="container">
+    <h2 id="manifesto-h" class="eyebrow" data-reveal>Three promises, by design</h2>
+    <ol role="list" class="list">
+      {principles.map((p, i) => (
+        <li class="item" data-scrub="pass">
+          <span class="mono idx" aria-hidden="true">0{i + 1} / 03</span>
+          <h3 class="big" style={`--n:${p.title.split(' ').length}`}>{p.title.split(' ').map((w, k) => (<><span class="w" style={`--k:${k}`}>{w}</span>{' '}</>))}</h3>
+          <div class="body" data-reveal>
+            <p class="muted">{p.text}</p>
+            <ul role="list" class="badges">
+              {p.badges.map(([name, id]) => (
+                <li><span class="small muted">{name}</span> <StatusBadge status={statusOf(id)} /></li>
+              ))}
+            </ul>
+          </div>
+        </li>
+      ))}
+    </ol>
+  </div>
+</section>
+
+<style>
+  .manifesto { padding-block: var(--space-9) var(--space-8); }
+  .list { padding: 0; margin-top: var(--space-7); display: grid; }
+  .item { --p: 0.5; display: grid; gap: var(--space-4) var(--space-7); padding-block: var(--space-7); border-top: 1px solid var(--line-strong); align-items: start; }
+  .item:last-child { border-bottom: 1px solid var(--line-strong); }
+  .idx { color: var(--accent); }
+  .big {
+    max-width: 14ch; font-family: var(--font-display); font-size: clamp(2.75rem, 1rem + 8vw, 8.5rem); line-height: 0.95; letter-spacing: -0.03em; text-wrap: balance;
+  }
+  .body { display: grid; gap: var(--space-4); align-content: start; }
+  .body p { max-width: 44ch; }
+  .badges { padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5); }
+  .badges li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.js) .item { --p: 0; }
+    /* scroll-fill with SOLID colours: word k of n goes from dim to bone as --f passes k/n (--p written by scrub.ts). Invalid colour-mix falls back to the inherited bone colour. */
+    :global(html.js) .big { --f: clamp(0, calc((var(--p) - 0.12) / 0.34), 1); }
+    :global(html.js) .big .w {
+      --on: clamp(0, calc((var(--f) * (var(--n) + 0.6) - var(--k)) * 3), 1);
+      color: color-mix(in srgb, var(--text) calc(var(--on) * 100%), var(--dim));
+    }
+  }
+  @media (min-width: 60rem) {
+    .item { grid-template-columns: 7rem minmax(0, 1.5fr) minmax(0, 1fr); }
+    .big { max-width: 9ch; }
+    .idx { padding-top: 1.2rem; }
+  }
+</style>

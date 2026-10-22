@@ -104,6 +104,20 @@ final class Progress {
 				return __( 'Removing old backups', 'openvault-backup' );
 			case JobState::STEP_CLEANUP:
 				return __( 'Cleaning up temporary files', 'openvault-backup' );
+			case JobState::STEP_FETCH:
+				return __( 'Downloading the backup', 'openvault-backup' );
+			case JobState::STEP_VERIFY:
+				return __( 'Verifying the backup', 'openvault-backup' );
+			case JobState::STEP_SNAPSHOT:
+				return __( 'Taking a safety snapshot', 'openvault-backup' );
+			case JobState::STEP_DB_RESTORE:
+				return __( 'Restoring the database', 'openvault-backup' );
+			case JobState::STEP_FILE_RESTORE:
+				return __( 'Restoring files', 'openvault-backup' );
+			case JobState::STEP_FILE_UNDO:
+				return __( 'Putting the files back', 'openvault-backup' );
+			case JobState::STEP_FINISH:
+				return __( 'Finishing the restore', 'openvault-backup' );
 			case JobState::STEP_DONE:
 				return __( 'Finished', 'openvault-backup' );
 			case JobState::STEP_FAILED:

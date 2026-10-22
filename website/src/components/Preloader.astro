@@ -1,0 +1,17 @@
+---
+// Preloader: shown only when the inline boot script adds html.preloading (home entry, first visit per session,
+// no reduced motion, no bots). Hidden by default; the whole timeline is CSS (motion.css), JS adds skip + focus clean-up.
+import VaultDial from './VaultDial.astro';
+import { SITE_NAME } from '../config/site';
+---
+
+<div class="preloader" id="preloader" role="status" aria-label={`Loading ${SITE_NAME}`}>
+  <div class="pl-panel pl-top"></div>
+  <div class="pl-panel pl-bot"></div>
+  <div class="pl-core">
+    <VaultDial class="pl-dial" />
+    <p class="pl-count" aria-hidden="true"><span class="pl-n"></span><small>/ 100</small></p>
+    <p class="pl-name" aria-hidden="true">{SITE_NAME}</p>
+  </div>
+  <button type="button" class="pl-skip" data-pl-skip>Skip</button>
+</div>

@@ -2,11 +2,14 @@
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
 import StatusBadge from '../components/StatusBadge.astro';
+import Icon from '../components/Icon.astro';
+import ShieldLock from '../components/art/ShieldLock.astro';
 import { repoUrl, siteUrl } from '../config/site';
 import { statusOf } from '../lib/registry';
 import { breadcrumbs } from '../lib/jsonld';
 
-const description = 'How OpenVault Backup is designed to keep your data safe: your own credentials, drive.file scope, encrypted secrets, authenticated downloads and safe restores.';
+const description = 'How OpenVault Backup is designed to keep your data safe: your own credentials, encrypted secrets, authenticated downloads and an undoable restore.';
+const icons = ["key", "scan", "lock", "download", "shield", "rewind", "lock", "eye-off", "file", "folder", "cloud"];
 const trail = [{ name: 'Home', path: '/' }, { name: 'Security', path: '/security/' }];
 
 interface Commitment { title: string; text: string; badges?: readonly (readonly [string, string])[] }
@@ -36,7 +39,12 @@ const commitments: Commitment[] = [
   },
   {
     title: 'A safety snapshot before every restore',
-    text: 'Before overwriting anything, a restore takes a snapshot of the current database and affected folders, so you can undo it. The plugin also protects itself: its own tables, settings and credentials are preserved across a database import, and its own folder is never overwritten.',
+    text: 'Before the database is replaced, a restore takes a real, locked database backup, and a rollback journal keeps every file it overwrites, so Undo can put both back. The plugin also protects itself: its own settings, locks and credentials survive a database import, and its own folder is never overwritten. Pre-alpha: try it on a copy first.',
+    badges: [['Restore', 'restore-in-place']],
+  },
+  {
+    title: 'The database dump is untrusted',
+    text: 'A backup may sit in storage somebody else can write to, so every line of the dump is checked against a strict whitelist before anything reaches your database. A refused line stops the restore with its line number.',
     badges: [['Restore', 'restore-in-place']],
   },
   {
@@ -44,9 +52,9 @@ const commitments: Commitment[] = [
     text: 'Logs must never contain tokens or passwords. The logger redacts secrets, it has unit tests, and the test matrix checks that S3 secrets appear in no response, page or log.',
   },
   {
-    title: 'Archives are checked on the way in',
-    text: 'An uploaded archive must be a genuine OpenVault archive, within size limits, and any path that tries to climb out with ../ is rejected during extraction.',
-    badges: [['Restore from upload', 'restore-upload']],
+    title: 'Archives are extracted safely',
+    text: 'During a restore, names with ../, absolute or backslash paths and symlinks are refused, and nothing is ever written over wp-config.php, server config files, the plugin folder or its backup folder. Restoring an uploaded archive is not built yet.',
+    badges: [['Restore', 'restore-in-place'], ['Restore from upload', 'restore-upload']],
   },
   {
     title: 'Local backups are hidden',
@@ -63,40 +71,41 @@ const commitments: Commitment[] = [
 
 <Base title="Security" description={description} path="/security/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Security" path="/security/" title="How it is designed to keep your data yours">
-    <p>These are the design commitments the plugin is being built to meet. They are rules the code must follow, not a claim that the code has passed an audit.</p>
-    <p>Where a commitment maps to a feature, you see that feature's real status. Commitments that cut across features carry a Design rule label instead.</p>
+    <p>Design commitments, not an audit result. Each one shows the real status of the feature it protects.</p>
+    <div slot="visual" aria-hidden="true"><ShieldLock /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <h2 class="sec-title">How it is designed</h2>
-      <ol role="list" class="rules">
+      <div class="stack">
+        <p class="eyebrow" data-reveal>{commitments.length} design rules</p>
+        <h2 class="sec-title" data-reveal>How it is designed</h2>
+      </div>
+      <ul role="list" class="rules" data-reveal="stagger">
         {commitments.map((c, i) => (
-          <li class="rule">
-            <span class="num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
-            <div class="r-body">
-              <h3>{c.title}</h3>
-              <p class="muted">{c.text}</p>
-            </div>
+          <li class="card rule">
+            <span class="card-ico"><Icon name={icons[i]} size={22} /></span>
+            <h3>{c.title}</h3>
+            <p>{c.text}</p>
             <ul role="list" class="r-tags">
               {c.badges ? (
                 c.badges.map(([name, id]) => (
                   <li><span class="small muted">{name}</span> <StatusBadge status={statusOf(id)} /></li>
                 ))
               ) : (
-                <li><span class="design-rule">Design rule</span></li>
+                <li><span class="design-rule mono">Design rule</span></li>
               )}
             </ul>
           </li>
         ))}
-      </ol>
+      </ul>
     </div>
   </section>
 
   <section class="section section--surface">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">Report a vulnerability</h2>
+        <h2 class="sec-title" data-reveal>Report a vulnerability</h2>
         <p class="lede">Found something? Please tell us privately first, so it can be fixed before it is public.</p>
       </div>
       <div class="stack">
@@ -108,21 +117,17 @@ const commitments: Commitment[] = [
 </Base>
 
 <style>
-  .rules { padding: 0; display: grid; }
-  .rule { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
-  .rule:last-child { border-bottom: 1px solid var(--line-strong); }
-  .num { font-family: var(--font-display); font-size: var(--step-3); line-height: 1; color: var(--accent); }
-  .r-body { display: grid; gap: var(--space-3); }
-  .r-body p { max-width: 56ch; }
-  .r-body h3 { font-size: var(--step-2); }
-  .r-tags { padding: 0; display: grid; gap: var(--space-2); align-content: start; justify-items: start; }
+  .rules { padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .rules > li { display: grid; }
+  .rule h3 { font-size: clamp(1.35rem, 1.1rem + 0.9vw, 1.75rem); }
+  .rule p { max-width: none; }
+  .r-tags { padding: 0; display: grid; gap: var(--space-2); justify-items: start; margin-top: var(--space-2); }
   .r-tags li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-  .design-rule { display: inline-flex; padding: 0.2em 0.75em; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: var(--step--1); font-weight: 600; line-height: 1.5; color: var(--muted); white-space: nowrap; }
+  .design-rule { display: inline-flex; padding: 0.25em 0.9em; border: 1px dashed var(--line-strong); border-radius: 999px; color: var(--muted); white-space: nowrap; }
   .two { display: grid; gap: var(--space-7); }
   .two .btn { justify-self: start; }
-  @media (min-width: 48rem) {
-    .rule { grid-template-columns: 5rem minmax(0, 1fr) 14rem; align-items: start; }
-  }
+  @media (min-width: 48rem) { .rules { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .rules { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (min-width: 60rem) {
     .two { grid-template-columns: 0.9fr 1.1fr; }
   }

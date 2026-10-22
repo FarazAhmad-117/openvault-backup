@@ -5,7 +5,7 @@
  * Phase: MVP
  *
  * Purpose: Enqueue assets/admin/css/admin.css on the plugin's own screens and the page scripts only on the screens
- * that use them (Backup Now, History, Destinations). Nothing is loaded anywhere else in the admin, no build step, no external
+ * that use them (Backup Now, History, Destinations, Restore). Nothing is loaded anywhere else in the admin, no build step, no external
  * requests. The REST nonce and all strings reach the scripts through wp_localize_script().
  *
  * @package OpenVault\Backup
@@ -72,6 +72,12 @@ class Assets {
 		} elseif ( 'openvault-destinations' === $slug ) {
 			wp_enqueue_script( 'ovb-destinations', OVB_URL . 'assets/admin/js/destinations.js', array(), OVB_VERSION, true );
 			wp_localize_script( 'ovb-destinations', 'ovbDestinations', $this->config( $this->destinations_strings() ) );
+		} elseif ( 'openvault-restore' === $slug ) {
+			wp_enqueue_script( 'ovb-restore', OVB_URL . 'assets/admin/js/restore.js', array(), OVB_VERSION, true );
+			$config               = $this->config( $this->restore_strings() );
+			$config['restoreUrl'] = esc_url_raw( Menu::url( 'openvault-restore' ) );
+			$config['loginUrl']   = esc_url_raw( wp_login_url( Menu::url( 'openvault-restore' ) ) );
+			wp_localize_script( 'ovb-restore', 'ovbRestore', $config );
 		} elseif ( 'openvault-backups' === $slug ) {
 			wp_enqueue_script( 'ovb-history', OVB_URL . 'assets/admin/js/history.js', array(), OVB_VERSION, true );
 			wp_localize_script( 'ovb-history', 'ovbHistory', $this->config( $this->history_strings() ) );
@@ -148,6 +154,75 @@ class Assets {
 			'created'       => __( 'The destination was saved. Use "Test connection" to check that it works.', 'openvault-backup' ),
 			'updated'       => __( 'The destination was updated. Use "Test connection" to check that it works.', 'openvault-backup' ),
 			'needName'      => __( 'Enter a name for this destination.', 'openvault-backup' ),
+		);
+	}
+
+	/**
+	 * Strings of the Restore script.
+	 *
+	 * @return array<string,string>
+	 */
+	private function restore_strings() {
+		return array(
+			'headProgress'   => __( '3. Progress', 'openvault-backup' ),
+			'headResult'     => __( '4. Result', 'openvault-backup' ),
+			'noFetch'        => __( 'This browser is too old for the restore page. Please update your browser.', 'openvault-backup' ),
+			'requestError'   => __( 'The request failed. Check your connection and try again.', 'openvault-backup' ),
+			'previewing'     => __( 'Checking what a restore would do...', 'openvault-backup' ),
+			'starting'       => __( 'Starting the restore...', 'openvault-backup' ),
+			'applying'       => __( 'Applying the restore...', 'openvault-backup' ),
+			/* translators: %s: backup date. */
+			'factBackup'     => __( 'Backup: %s', 'openvault-backup' ),
+			/* translators: %s: where the backup is read from. */
+			'factSource'     => __( 'Read from: %s', 'openvault-backup' ),
+			'factDb'         => __( 'The database will be replaced.', 'openvault-backup' ),
+			'factNoDb'       => __( 'The database will not be changed.', 'openvault-backup' ),
+			'factFiles'      => __( 'Files will be restored (plugins, themes, uploads and others as contained in the backup).', 'openvault-backup' ),
+			'factNoFiles'    => __( 'No files will be changed.', 'openvault-backup' ),
+			/* translators: 1: free disk space, 2: needed disk space. */
+			'factDisk'       => __( 'Disk space: %1$s free, about %2$s needed.', 'openvault-backup' ),
+			/* translators: %s: size. */
+			'factDownload'   => __( 'To download first: %s.', 'openvault-backup' ),
+			/* translators: %s: size. */
+			'factSnapshot'   => __( 'A safety snapshot of the current database (about %s) is taken first.', 'openvault-backup' ),
+			/* translators: %s: size. */
+			'factJournal'    => __( 'The files it replaces are saved in a rollback journal (up to about %s).', 'openvault-backup' ),
+			'diskUnknown'    => __( 'unknown', 'openvault-backup' ),
+			'ackNeeded'      => __( 'Tick "I understand" to continue.', 'openvault-backup' ),
+			'ready1'         => __( 'Replace the live database with the backup (a safety snapshot was taken first when the database is restored).', 'openvault-backup' ),
+			'ready2'         => __( 'Replace files with the ones in the backup (a rollback journal keeps the originals).', 'openvault-backup' ),
+			'readyNone'      => __( 'Apply the restore.', 'openvault-backup' ),
+			'maintenanceOn'  => __( 'Maintenance mode is on: visitors see a maintenance page while the restore runs.', 'openvault-backup' ),
+			'loggedOutNote'  => __( 'The restore is running on the server. You may have been logged out because the users table was replaced; progress is still shown here.', 'openvault-backup' ),
+			'waiting'        => __( 'Waiting for the site to answer again. The restore keeps running in the background.', 'openvault-backup' ),
+			'doneLogin'      => __( 'The restore finished. You may need to log in again.', 'openvault-backup' ),
+			'logIn'          => __( 'Log in', 'openvault-backup' ),
+			'doneTitle'      => __( 'Restore complete', 'openvault-backup' ),
+			'undoDoneTitle'  => __( 'Undo complete', 'openvault-backup' ),
+			'failedTitle'    => __( 'Restore failed', 'openvault-backup' ),
+			'cancelledTitle' => __( 'Restore cancelled', 'openvault-backup' ),
+			'failedHelp'     => __( 'What you can do: use "Undo restore" below if it is offered, or start the restore again. Details are in the Logs page.', 'openvault-backup' ),
+			'cancelledHelp'  => __( 'Nothing on your site was changed.', 'openvault-backup' ),
+			'confirmCancel'  => __( 'Cancel this restore? Nothing has been changed on your site yet.', 'openvault-backup' ),
+			'cancelling'     => __( 'Cancelling...', 'openvault-backup' ),
+			/* translators: 1: tables, 2: rows, 3: statements. */
+			'resDb'          => __( 'Database: %1$s tables restored (%2$s rows, %3$s statements).', 'openvault-backup' ),
+			/* translators: 1: restored, 2: created, 3: overwritten, 4: size. */
+			'resFiles'       => __( 'Files: %1$s restored (%2$s new, %3$s overwritten, %4$s).', 'openvault-backup' ),
+			/* translators: 1: number, 2: reason. */
+			'resSkipped'     => __( 'Skipped: %1$s files - %2$s.', 'openvault-backup' ),
+			/* translators: 1: files put back, 2: files removed. */
+			'resUndoFiles'   => __( 'Files: %1$s put back, %2$s removed (they did not exist before the restore).', 'openvault-backup' ),
+			/* translators: %s: duration. */
+			'resTime'        => __( 'Took %s.', 'openvault-backup' ),
+			'resKept'        => __( 'This site\'s current address was kept.', 'openvault-backup' ),
+			'resSnapshot'    => __( 'The safety snapshot is in History (locked).', 'openvault-backup' ),
+			'historyLink'    => __( 'Open History', 'openvault-backup' ),
+			'undoNone'       => __( 'Undo is not available for this restore.', 'openvault-backup' ),
+			'undoOffer'      => __( 'You can undo this restore: the database snapshot and the saved copies of the replaced files are put back.', 'openvault-backup' ),
+			'undoStarting'   => __( 'Starting the undo...', 'openvault-backup' ),
+			'confirmDismiss' => __( 'Delete the undo data? The restore can no longer be undone afterwards.', 'openvault-backup' ),
+			'dismissed'      => __( 'The undo data was deleted.', 'openvault-backup' ),
 		);
 	}
 

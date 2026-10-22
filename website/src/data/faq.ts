@@ -53,15 +53,32 @@ export const faqs: Faq[] = [
   },
   {
     q: 'Will it work on shared hosting?',
-    a: 'It is designed for it. Every long task is built to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory. The pre-alpha 0.2.0 is tested in Docker profiles, including low-memory and restricted ones, but it has not yet been proven on real shared hosts.',
+    a: 'It is designed for it. Every long task is built to be resumable in small batches, sized for roughly 30 second limits and 128 MB of memory. The pre-alpha 0.3.0 is tested in Docker profiles, including low-memory and restricted ones, but it has not yet been proven on real shared hosts.',
   },
   {
     q: 'What can the pre-alpha do today?',
-    a: 'Version 0.2.0 creates backups of your database and files (ZIP or TAR.GZ, split into parts), keeps them in a protected folder on your own server, can also send a copy to S3-compatible storage or another folder, and lets you download, lock or delete them. It cannot restore, run schedules, delete old backups automatically, send backups to Google Drive or encrypt archives. S3 was verified live only against SeaweedFS. A backup that stays only on your server does not protect you if you lose the server.',
+    a: 'Version 0.3.0 creates backups of your database and files (ZIP or TAR.GZ, split into parts), keeps them in a protected folder on your own server, can also send a copy to S3-compatible storage or another folder, lets you download, lock or delete them, and restores a backup of this site from your history with a safety snapshot and Undo. It cannot restore an uploaded archive, migrate to another domain, run schedules, delete old backups automatically, send backups to Google Drive or encrypt archives. S3 was verified live only against SeaweedFS. A backup that stays only on your server does not protect you if you lose the server.',
   },
   {
-    q: 'When will restore and Google Drive work?',
-    a: 'Not yet, and there are no dates. Restore is the next half of the core loop, and Google Drive is planned after it. S3-compatible storage already works in pre-alpha. The roadmap shows each milestone and where every feature stands.',
+    q: 'Is restore safe?',
+    a: 'It is built to be careful, but it is pre-alpha and a restore replaces your live database and files, so try it on a copy of your site first. Before the database is replaced the plugin takes a safety snapshot, a rollback journal keeps every file it overwrites, and Undo puts both back. Undoing the database also discards anything written since the restore. It never overwrites wp-config.php, the plugin itself or server config files.',
+    featured: true,
+  },
+  {
+    q: 'How does restore work?',
+    a: 'Choose a backup of this site (from the local copy or any destination) and Database only, Files only or Whole site. A preview shows sizes, warnings and what is never overwritten. You type RESTORE, the backup is downloaded and its checksum verified, then you confirm again with Apply restore now. Visitors see a maintenance page meanwhile.',
+  },
+  {
+    q: 'Can I undo a restore?',
+    a: 'Yes. Undo restores the database from the safety snapshot and the files from the rollback journal. Dismiss undo data deletes them when you are happy with the result.',
+  },
+  {
+    q: 'Can I restore an uploaded archive or move to a new domain?',
+    a: 'Not yet. Only backups in your history can be restored, a different table prefix is refused, and a backup from a different site address needs an acknowledgement and keeps its old URLs. Upload restore and migration with safe search and replace are planned, with no dates.',
+  },
+  {
+    q: 'When will schedules and Google Drive work?',
+    a: 'Not yet, and there are no dates. Schedules and retention are next, and Google Drive is planned after them. S3-compatible storage and restore already work in pre-alpha. The roadmap shows each milestone and where every feature stands.',
   },
 ];
 

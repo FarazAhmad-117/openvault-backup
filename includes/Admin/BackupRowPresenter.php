@@ -109,7 +109,7 @@ final class BackupRowPresenter {
 			case 'pre-update':
 				return __( 'Before update', 'openvault-backup' );
 			case 'pre-restore':
-				return __( 'Before restore', 'openvault-backup' );
+				return __( 'Safety snapshot before restore', 'openvault-backup' );
 		}
 		return __( 'Unknown', 'openvault-backup' );
 	}
@@ -170,6 +170,17 @@ final class BackupRowPresenter {
 	 */
 	public static function is_running( $status ) {
 		return in_array( $status, array( 'queued', 'running', 'uploading' ), true );
+	}
+
+	/**
+	 * Whether a backup can be offered for restore: finished (complete or with warnings) and not encrypted (encrypted backups cannot be restored yet).
+	 *
+	 * @param string $status    Backup status.
+	 * @param bool   $encrypted Whether the backup is encrypted.
+	 * @return bool
+	 */
+	public static function can_restore( $status, $encrypted ) {
+		return self::has_files( $status ) && ! $encrypted;
 	}
 
 	/**

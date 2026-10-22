@@ -32,8 +32,18 @@ final class JobState {
 	const STEP_UPLOAD    = 'upload';
 	const STEP_RETENTION = 'retention';
 	const STEP_CLEANUP   = 'cleanup';
-	const STEP_DONE      = 'done';
-	const STEP_FAILED    = 'failed';
+
+	// Restore jobs (Milestone 5) use the same state class with these steps.
+	const STEP_FETCH        = 'fetch';
+	const STEP_VERIFY       = 'verify';
+	const STEP_SNAPSHOT     = 'snapshot';
+	const STEP_DB_RESTORE   = 'db_restore';
+	const STEP_FILE_RESTORE = 'file_restore';
+	const STEP_FILE_UNDO    = 'file_undo';
+	const STEP_FINISH       = 'finish';
+
+	const STEP_DONE   = 'done';
+	const STEP_FAILED = 'failed';
 
 	const STEPS = array(
 		self::STEP_PREFLIGHT,
@@ -44,6 +54,13 @@ final class JobState {
 		self::STEP_UPLOAD,
 		self::STEP_RETENTION,
 		self::STEP_CLEANUP,
+		self::STEP_FETCH,
+		self::STEP_VERIFY,
+		self::STEP_SNAPSHOT,
+		self::STEP_DB_RESTORE,
+		self::STEP_FILE_RESTORE,
+		self::STEP_FILE_UNDO,
+		self::STEP_FINISH,
 		self::STEP_DONE,
 		self::STEP_FAILED,
 	);

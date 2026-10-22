@@ -15,7 +15,7 @@ Free, open-source (GPLv2+) WordPress backup plugin. **Bring your own credentials
 Requires **WordPress 6.5+** and **PHP 7.4+**.
 
 > [!WARNING]
-> **Status: pre-alpha (0.2.0).** The plugin creates backups of your database and files (ZIP or TAR.GZ, resumable, split into parts), keeps a copy on your server and can also send them to S3-compatible storage or another local folder. You can download, lock and delete them. **It cannot restore, run schedules, delete old backups automatically, send backups to Google Drive or encrypt archives yet.** A downloaded or off-site backup can only be extracted by hand. S3 uploads were verified live only against SeaweedFS. Do not rely on it as your only backup. Progress is tracked in `CHANGELOG.md` and `docs/plan/01-scope-and-roadmap.md`.
+> **Status: pre-alpha (0.3.0).** The plugin creates backups of your database and files (ZIP or TAR.GZ, resumable, split into parts), keeps a copy on your server and can also send them to S3-compatible storage or another local folder. You can download, lock and delete them, and **restore a backup of this site from your history** (database, files or both) with a safety snapshot first and an undo afterwards. **Try restore on a copy of your site first.** It cannot restore an uploaded archive, migrate to another domain or table prefix, restore a multisite network, run schedules, delete old backups automatically, send backups to Google Drive or encrypt archives yet. `wp-config.php` is never restored. S3 uploads were verified live only against SeaweedFS. Do not rely on it as your only backup. Progress is tracked in `CHANGELOG.md` and `docs/plan/01-scope-and-roadmap.md`.
 
 ## Install from source
 

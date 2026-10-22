@@ -93,7 +93,7 @@ wps plugin activate openvault-backup $NETWORK --quiet || fail "reactivate"
 AFTER=$(wps option get ovb_local_dir)
 TABLES=$(wps eval 'global $wpdb; echo count( $wpdb->get_col( "SHOW TABLES LIKE \"%ovb\\_%\"" ) );' 2>/dev/null)
 if [ "$BEFORE" = "$AFTER" ]; then echo "PASS local dir stable across reactivation"; else echo "FAIL local dir changed ($BEFORE -> $AFTER)"; CHECK_STATUS=1; fi
-if [ "${TABLES:-0}" -ge 5 ]; then echo "PASS tables kept after deactivation ($TABLES)"; else echo "FAIL tables missing after deactivation ($TABLES)"; CHECK_STATUS=1; fi
+if [ "${TABLES:-0}" -ge 6 ]; then echo "PASS tables kept after deactivation ($TABLES)"; else echo "FAIL tables missing after deactivation ($TABLES)"; CHECK_STATUS=1; fi
 chown -R www-data:www-data /var/www/html
 
 step "HTTP through Apache"
@@ -125,7 +125,7 @@ done
 
 body=$(curl -s -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-system")
 if grep -q "ovb-copy-report" <<<"$body"; then echo "PASS system info copy button served"; else echo "FAIL system info copy button"; CHECK_STATUS=1; fi
-if grep -q "5 of 5 present" <<<"$body"; then echo "PASS system info shows 5 of 5 tables over HTTP"; else echo "FAIL system info tables over HTTP"; CHECK_STATUS=1; fi
+if grep -q "6 of 6 present" <<<"$body"; then echo "PASS system info shows 6 of 6 tables over HTTP"; else echo "FAIL system info tables over HTTP"; CHECK_STATUS=1; fi
 
 # Logged-out visitors must not reach the pages.
 anon=$(code "$URL/wp-admin/admin.php?page=openvault-system")
@@ -133,6 +133,8 @@ if [ "$anon" = 302 ]; then echo "PASS anonymous request is redirected to login";
 
 # shellcheck source=tests/matrix/http-e2e.sh
 source /src/tests/matrix/http-e2e.sh
+# shellcheck source=tests/matrix/http-e2e-restore.sh
+source /src/tests/matrix/http-e2e-restore.sh
 
 step "PHP problems attributable to the plugin"
 LOG=/var/www/html/wp-content/debug.log

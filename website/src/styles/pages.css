@@ -1,0 +1,70 @@
+/*
+ * Shared patterns for the inner pages (wave 2). Visual language = the home page: oversized serif, mono labels,
+ * brass hairlines. Hidden/animated states for these live in motion.css (html.js + no-preference); nothing here hides content.
+ */
+
+/* oversized section titles */
+.sec-title { font-size: clamp(2.25rem, 1rem + 4.4vw, 4.75rem); line-height: 1; letter-spacing: -0.025em; max-width: 14ch; }
+.sec-lede { max-width: 52ch; }
+
+/* honest notices: one look everywhere (hazard hairline + brass-yellow rule) */
+.warn-box { position: relative; border-radius: var(--radius-lg); padding: var(--space-6); overflow: hidden; }
+.warn-box::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: repeating-linear-gradient(135deg, var(--warn) 0 10px, transparent 10px 20px); opacity: 0.8; }
+.warn-box h2, .warn-box h3 { font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2.25rem); }
+
+/* status line under a page lede */
+.status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
+
+/* generic ledger rows: hairlines, a hover that slides the text in a little, spotlight where data-spot is set */
+.rows { padding: 0; display: grid; border-top: 1px solid var(--line-strong); list-style: none; }
+.rows > li { border-bottom: 1px solid var(--line); }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .rows > li > :first-child { transition: transform 0.5s var(--ease-out); }
+  .rows > li:hover > :first-child { transform: translateX(0.6rem); }
+}
+
+/* big numerals */
+.numeral { font-family: var(--font-display); line-height: 0.9; letter-spacing: -0.04em; color: var(--accent); font-variant-numeric: tabular-nums; }
+
+/* accordion (FAQ): large serif questions, a plus that turns into a minus */
+.acc { display: grid; border-top: 1px solid var(--line-strong); }
+.acc-item { border-bottom: 1px solid var(--line-strong); }
+.acc-item > summary { display: flex; align-items: center; justify-content: space-between; gap: var(--space-5); padding-block: var(--space-5); cursor: pointer; list-style: none; font-family: var(--font-display); font-size: clamp(1.5rem, 1.1rem + 1.6vw, 2.5rem); line-height: 1.12; letter-spacing: -0.01em; }
+.acc-item > summary::-webkit-details-marker { display: none; }
+.acc-item > summary:hover { color: var(--accent); }
+.acc-item > summary .n { flex: none; width: 3rem; font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.14em; color: var(--accent); }
+.acc-item > summary .q { flex: 1; min-width: 0; }
+.acc-item > summary i { position: relative; flex: none; width: 1.25rem; height: 1.25rem; }
+.acc-item > summary i::before, .acc-item > summary i::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: currentColor; transition: transform 0.45s var(--ease-out); }
+.acc-item > summary i::after { transform: rotate(90deg); }
+.acc-item[open] > summary i::after { transform: rotate(0); }
+.acc-item > .a { padding: 0 0 var(--space-5) calc(3rem + var(--space-5)); max-width: calc(56ch + 3rem + var(--space-5)); }
+@media (max-width: 40rem) {
+  .acc-item > summary .n { display: none; }
+  .acc-item > .a { padding-left: 0; }
+}
+
+/* question/answer blocks that stay open (secondary pages) */
+.qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
+.qa h3 { font-size: var(--step-2); line-height: 1.2; }
+
+/* panels get a spotlight and a lift */
+.panel[data-spot] { overflow: hidden; }
+
+/* mono code block with a label (endpoint patterns) */
+.codeblock { display: grid; gap: var(--space-2); }
+.codeblock .cap { color: var(--muted); }
+.codeblock pre { margin: 0; border-color: var(--line-strong); background: var(--surface); box-shadow: var(--shadow-lift); position: relative; }
+.codeblock pre::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.codeblock pre code { font-size: clamp(0.8125rem, 0.7rem + 0.5vw, 1.125rem); overflow-wrap: anywhere; white-space: pre-wrap; }
+
+/* hairline that draws in (use <hr class="hair" data-reveal="draw">) */
+.hair { border: 0; border-top: 1px solid var(--accent); margin: 0; }
+
+/* Features ledger filter: radio inputs inside .ledger[data-filterable]; rows carry data-status, groups data-phase */
+.ledger[data-filterable]:has(#st-available:checked) .row:not([data-status='available']),
+.ledger[data-filterable]:has(#st-in-progress:checked) .row:not([data-status='in-progress']),
+.ledger[data-filterable]:has(#st-planned:checked) .row:not([data-status='planned']) { display: none; }
+.ledger[data-filterable]:has(#st-available:checked) .group:not(:has(.row[data-status='available'])),
+.ledger[data-filterable]:has(#st-in-progress:checked) .group:not(:has(.row[data-status='in-progress'])),
+.ledger[data-filterable]:has(#st-planned:checked) .group:not(:has(.row[data-status='planned'])) { display: none; }

@@ -1,0 +1,22 @@
+const { open, go, sleep } = require('./lib');
+(async () => {
+  const { browser, page } = await open();
+  await go(page, 'openvault-destinations');
+  await page.type('#ovb-dest-label', 'Example bucket');
+  await page.select('#ovb-s3-preset', 'custom').catch(async () => console.log(await page.evaluate(() => [...document.querySelectorAll('#ovb-s3-preset option')].map(o => o.value + '=' + o.text))));
+  await sleep(300);
+  await page.evaluate(() => document.querySelectorAll('details').forEach(d => d.open = true));
+  await page.type('#ovb-s3-region', 'us-east-1');
+  await page.type('#ovb-s3-endpoint', 'http://s3srv:8333');
+  await page.type('#ovb-s3-bucket', 'example-bucket');
+  await page.type('#ovb-s3-prefix', 'backups/example-site');
+  await page.type('#ovb-s3-access', 'demoaccess'); await page.type('#ovb-s3-secret', 'demosecret0123456789');
+  await page.evaluate(() => { document.getElementById('ovb-s3-http').click(); document.getElementById('ovb-s3-private').click(); });
+  await page.screenshot({ path: '/w3/out/a-form.png', fullPage: true });
+  await page.evaluate(() => document.querySelector('form button[type=submit], form .button-primary').click());
+  await sleep(4000);
+  await page.screenshot({ path: '/w3/out/a-saved.png', fullPage: true });
+  await go(page, 'openvault-backup-now');
+  console.log(await page.evaluate(() => [...document.querySelectorAll('form input, form select, button')].map(e => e.name + ':' + e.id + ':' + e.type + ':' + (e.value||'').slice(0,20)).join('\n')));
+  await browser.close();
+})().catch(e => { console.error(e); process.exit(1); });

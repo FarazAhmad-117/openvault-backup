@@ -20,6 +20,10 @@ class BackupRowPresenterTest extends TestCase {
 		}
 	}
 
+	public function test_the_snapshot_trigger_is_labelled_clearly() {
+		$this->assertSame( 'Safety snapshot before restore', P::trigger_label( 'pre-restore' ) );
+	}
+
 	public function test_unknown_values_are_safe() {
 		$this->assertSame( 'Unknown', P::status_label( '<script>' ) );
 		$this->assertSame( 'ovb-status ovb-status--unknown', P::status_class( '" onmouseover="x' ) );

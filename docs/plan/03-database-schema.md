@@ -1,6 +1,6 @@
 # 03 – Database Schema
 
-All tables use `{$wpdb->prefix}ovb_*`, created with `dbDelta` in `Core\Installer`, versioned via option `ovb_db_version` (current: `1`).
+All tables use `{$wpdb->prefix}ovb_*`, created with `dbDelta` in `Core\Installer`, versioned via option `ovb_db_version` (current: `2`).
 
 **Conventions (implemented in Milestone 1)**
 - Every "JSON" column is `LONGTEXT` holding JSON. The MySQL/MariaDB `JSON` type is not used (not available on all supported hosts, and `dbDelta` handles it badly).
@@ -54,6 +54,24 @@ Open question for the Scheduler milestone: `next_run_at` duplicates what Action 
 
 ## ovb_logs
 id, backup_id NULL (indexed), level (indexed: debug/info/warning/error), message, context (LONGTEXT JSON, secrets redacted by `Support\Logger`), created_at (indexed).
+
+## ovb_restores (schema 2, Milestone 5 step 5a)
+A restore replaces the database, so its job record lives in a table of its own: the database dump excludes every `{prefix}ovb_*` table, so a table survives an import, while an options row would be dropped with `wp_options`. Created by `migrate_2()` (dbDelta, idempotent; a site at schema 1 gets it on the next `plugins_loaded`).
+| Column | Type | Notes |
+|---|---|---|
+| id | BIGINT UNSIGNED PK | |
+| backup_id (indexed) | BIGINT UNSIGNED | The backup being restored (a row of `ovb_backups`) |
+| mode | VARCHAR(10) | `full` / `db` / `files`, and `undo` (a job that reverses an earlier restore, step 5c; its meta has `undo_of`) |
+| status | VARCHAR(20), indexed | `queued` / `running` / `verified` / `complete` / `failed` / `cancelled` (see docs/plan/08-restore.md) |
+| step | VARCHAR(20) | Current `JobState` step (`preflight`, `fetch`, `verify`, `snapshot`, `db_restore`, `file_restore`, `file_undo`, `finish`, `done`, `failed`); kept in step with the state by `save_state()` |
+| state | LONGTEXT (JSON) | `JobState` (cursor + small meta: restore id, mode, acknowledged warnings, tried sources) |
+| snapshot_backup_id | BIGINT UNSIGNED NULL | The pre-restore safety snapshot (a database backup with trigger `pre-restore`; none for a files-only restore); filled in by the `snapshot` step |
+| error | TEXT NULL | Failure or cancel message, scrubbed, at most 1000 characters |
+| started_at / finished_at | DATETIME NULL | UTC. `started_at` the first time the job runs, `finished_at` when it becomes complete, failed or cancelled |
+| created_at / updated_at | DATETIME | UTC |
+| created_by | BIGINT UNSIGNED | User id that started it (0 = unknown) |
+
+`Database\RestoresRepository` follows the other repositories: prepared queries, typed arrays, pure `normalise_fields()` validators (unit tested), `state` only through `load_state()` / `save_state()`. `find_active()` = queued, running, verified (the restore still owns the site: no second restore may start); `find_incomplete()` / `has_running()` = queued, running (a runner has work, and a backup must not start).
 
 ## Options (wp_options)
 `ovb_settings` (global settings), `ovb_db_version`, `ovb_local_dir` (random folder name under wp-content), `ovb_installed_at`

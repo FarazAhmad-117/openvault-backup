@@ -23,13 +23,20 @@ PHPCS with WordPress Coding Standards, PHPStan level 5+, Plugin Check plugin, Gi
   - [ ] Tag and push: `git tag v0.1.0 && git push origin v0.1.0`. The workflow gates on the `min-supported` and `php84` matrix profiles, then publishes the zip, the versioned zip and the `.sha256`.
   - [ ] Download the published zip, install it on a clean WordPress, run one backup, download it.
   - [ ] Deploy the site only after the release exists (its download links and Available badges depend on it).
-- **Release 0.2.0 checklist** (pre-alpha, local + S3-compatible destinations):
+- **Release 0.2.0 checklist** (superseded by 0.3.0 once tagged; pre-alpha, local + S3-compatible destinations):
   - [ ] `Version` in `openvault-backup.php`, `Stable tag` in `readme.txt`, `PLUGIN_VERSION` in `website/src/config/site.ts` are all `0.2.0` (also `OVB_VERSION` and `tests/phpstan-bootstrap.php`; `OVB_DB_VERSION` unchanged).
   - [ ] `CHANGELOG.md` has the `## 0.2.0 - pre-alpha` section with known limitations; `website/src/data/features.ts` marks only what truly works as `available` with `since: '0.2.0'`.
   - [ ] `composer run lint && composer run analyse && composer run test` green on PHP 7.4 and 8.3; website `npm run build` and `npx vitest run` green.
   - [ ] Once: `git rm --cached .phpunit.result.cache` (it is now in `.gitignore`).
   - [ ] Tag and push: `git tag v0.2.0 && git push origin v0.2.0`. The workflow gates on the `min-supported` and `php84` matrix profiles, then publishes the zip, the versioned zip and the `.sha256`.
   - [ ] Download the published zip, install it on a clean WordPress, add a Local destination (a folder outside the plugin folder), run one backup to it, download it.
+  - [ ] Deploy the site only after the release exists (its download links and Available badges depend on it).
+- **Release 0.3.0 checklist** (pre-alpha: restore from history with undo, released together with the website redesign):
+  - [ ] `Version` in `openvault-backup.php`, `Stable tag` in `readme.txt`, `PLUGIN_VERSION` in `website/src/config/site.ts` are all `0.3.0` (also `OVB_VERSION` and `tests/phpstan-bootstrap.php`; `OVB_DB_VERSION` stays `2`).
+  - [ ] `CHANGELOG.md` has the `## 0.3.0 - pre-alpha` section with the known limitations; `Unreleased` only has the "next" line. `website/src/data/features.ts` marks `restore-in-place` `available` with `since: '0.3.0'` and everything unbuilt stays `planned`.
+  - [ ] `composer run lint && composer run analyse && composer run test` green on PHP 7.4 and 8.3; website `npx vitest run`, `npm run build`, links, axe and Lighthouse green.
+  - [ ] Tag and push: `git tag v0.3.0 && git push origin v0.3.0`. The workflow refuses a tag that does not match the header `Version` and `Stable tag`, gates on the `min-supported` and `php84` matrix profiles, then publishes the zip, the versioned zip and the `.sha256`.
+  - [ ] Download the published zip and install it on a clean WordPress. Take a backup. WRECK a throwaway site (delete a plugin folder, change posts and options), restore it from History (Whole site), verify the site matches the backup, then Undo restore and check it returns to the wrecked state.
   - [ ] Deploy the site only after the release exists (its download links and Available badges depend on it).
 - GitHub repo first (issues, contributing guide, code of conduct).
 - WordPress.org submission at 1.0: `readme.txt`, GPLv2+, no trademark at slug start, no external calls without user action.

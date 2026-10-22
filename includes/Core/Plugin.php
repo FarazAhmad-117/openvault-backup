@@ -8,7 +8,7 @@
  *  - Hook everything on plugins_loaded / init / admin_menu
  *  - Run DB migrations if stored schema version < current
  *
- * The job runner and the REST routes are hooked on every request type; the menu, assets and the download endpoint in the admin.
+ * The job runners (backup and restore) and the REST routes are hooked on every request type; the menu, assets and the download endpoint in the admin.
  *
  * @package OpenVault\Backup
  */
@@ -18,8 +18,11 @@ namespace OpenVault\Backup\Core;
 use OpenVault\Backup\Admin\Assets;
 use OpenVault\Backup\Admin\Menu;
 use OpenVault\Backup\Engine\JobRunner;
+use OpenVault\Backup\Restore\MaintenanceMode;
+use OpenVault\Backup\Restore\RestoreRunner;
 use OpenVault\Backup\Rest\DestinationsRestController;
 use OpenVault\Backup\Rest\RestController;
+use OpenVault\Backup\Rest\RestoreRestController;
 use OpenVault\Backup\Security\DownloadController;
 
 defined( 'ABSPATH' ) || exit;
@@ -73,10 +76,15 @@ final class Plugin {
 		// requests, so the runner is hooked on every request type.
 		$this->runner = new JobRunner();
 		$this->runner->register_hooks();
+		( new RestoreRunner() )->register_hooks();
+
+		// The maintenance page of a database restore (a no-op unless the flag file exists and is valid), on every request type.
+		( new MaintenanceMode() )->register_hooks();
 
 		// REST requests are not admin requests, so the routes are hooked everywhere. Every route checks capability + nonce.
 		( new RestController() )->register_hooks();
 		( new DestinationsRestController() )->register_hooks();
+		( new RestoreRestController() )->register_hooks();
 
 		if ( is_admin() ) {
 			$menu = new Menu();

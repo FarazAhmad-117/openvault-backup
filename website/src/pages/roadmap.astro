@@ -2,45 +2,57 @@
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
 import FeatureGrid from '../components/FeatureGrid.astro';
+import Buckets from '../components/art/Buckets.astro';
+import Rewind from '../components/art/Rewind.astro';
+import Parts from '../components/art/Parts.astro';
+import Seal from '../components/art/Seal.astro';
+import VaultDoor from '../components/art/VaultDoor.astro';
 import { PLUGIN_VERSION, siteUrl } from '../config/site';
 import { milestones } from '../data/roadmap';
 import { breadcrumbs } from '../lib/jsonld';
 
 const description = 'The OpenVault Backup roadmap: Alpha, Beta and 1.0 milestones with their exit criteria, plus every feature by phase. No dates, no promises.';
+const arts = [Rewind, Parts, Seal];
 const trail = [{ name: 'Home', path: '/' }, { name: 'Roadmap', path: '/roadmap/' }];
 ---
 
 <Base title="Roadmap" description={description} path="/roadmap/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Roadmap" path="/roadmap/" title="Three milestones, no dates">
     <p>Each milestone is finished when its exit criteria are met, not when a date arrives. We do not publish dates we cannot keep.</p>
+    <div slot="visual" aria-hidden="true"><VaultDoor /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <h2 class="sec-title">Release milestones</h2>
-      <ol role="list" class="timeline">
-        <li class="node node--now">
+      <div class="stack">
+        <p class="eyebrow" data-reveal>Release milestones</p>
+        <h2 class="sec-title" data-reveal>Where we are, and what is next</h2>
+      </div>
+      <ol role="list" class="timeline" data-scrub="pass">
+        <li class="node node--now" data-reveal>
           <span class="marker" aria-hidden="true"></span>
-          <div class="body">
-            <p class="kicker small">Where we are</p>
+          <div class="body card">
+            <div class="art-wrap" aria-hidden="true"><Buckets /></div>
+            <p class="kicker mono">Where we are</p>
             <h3>Pre-alpha {PLUGIN_VERSION}</h3>
-            <p class="muted">Half of the core loop works: the plugin backs up the database and files to your server and to S3-compatible storage or a folder, and lets you download them. Restore, schedules, retention, Google Drive and archive encryption are not built yet.</p>
+            <p class="muted">The core loop works: the plugin backs up the database and files to your server and to S3-compatible storage or a folder, and restores a backup of this site from your history with a safety snapshot and undo. Try restore on a copy first. Schedules, retention, Google Drive, archive encryption, upload restore and migration are not built yet.</p>
           </div>
         </li>
-        {milestones.map((m) => (
-          <li class="node">
+        {milestones.map((m, i) => { const Art = arts[i]; return (
+          <li class="node" data-reveal>
             <span class="marker" aria-hidden="true"></span>
-            <div class="body">
-              <p class="kicker small">Milestone, published on {m.channel}</p>
+            <div class="body card card--planned">
+              <div class="art-wrap art--planned" aria-hidden="true"><Art /></div>
+              <p class="kicker mono">Milestone, published on {m.channel}</p>
               <h3>{m.name}</h3>
               <p class="muted">{m.summary}</p>
-              <p class="exit-label small">Exit criteria</p>
+              <p class="exit-label mono">Exit criteria</p>
               <ul class="exit">
                 {m.exit.map((e) => <li>{e}</li>)}
               </ul>
             </div>
           </li>
-        ))}
+        ); })}
       </ol>
     </div>
   </section>
@@ -48,8 +60,9 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'Roadmap', path: '/roadmap/'
   <section class="section section--surface">
     <div class="container stack-lg">
       <div class="stack">
-        <h2 class="sec-title">Features by phase</h2>
-        <p class="lede">The phases group the work. The milestones above say when the work counts as done.</p>
+        <p class="eyebrow" data-reveal>The work</p>
+        <h2 class="sec-title" data-reveal>Features by phase</h2>
+        <p class="lede" data-reveal>The phases group the work. The milestones above say when the work counts as done.</p>
       </div>
       <FeatureGrid headingLevel="h3" />
     </div>
@@ -57,23 +70,22 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'Roadmap', path: '/roadmap/'
 </Base>
 
 <style>
-  .timeline { padding: 0; position: relative; display: grid; gap: var(--space-7); margin-top: var(--space-6); }
-  .timeline::before { content: ''; position: absolute; left: 0.5rem; top: 0.6rem; bottom: 0.6rem; width: 1px; background: var(--line-strong); }
-  .node { position: relative; padding-left: var(--space-7); }
-  .marker { position: absolute; left: 0; top: 0.35rem; width: 1.05rem; height: 1.05rem; border-radius: 50%; background: var(--bg); border: 1px solid var(--accent); }
-  .node--now .marker { background: var(--warn); border-color: var(--warn); box-shadow: 0 0 0 4px color-mix(in srgb, var(--warn) 22%, transparent); }
-  .body { display: grid; gap: var(--space-2); justify-items: start; }
-  .kicker { color: var(--accent); font-weight: 600; letter-spacing: 0.02em; }
+  .timeline { --p: 1; padding: 0; position: relative; display: grid; gap: var(--space-8); margin-top: var(--space-6); padding-left: var(--space-7); list-style: none; }
+  .timeline::before, .timeline::after { content: ''; position: absolute; left: 0.5rem; top: 0.6rem; bottom: 0.6rem; width: 1px; background: var(--line-strong); }
+  .timeline::after { background: var(--accent); transform-origin: top; transform: scaleY(var(--p)); }
+  @media (prefers-reduced-motion: no-preference) { :global(html.js) .timeline { --p: 0; } :global(html.js) .timeline::after { transform: scaleY(clamp(0, calc((var(--p) - 0.18) * 1.9), 1)); } }
+  .node { position: relative; }
+  .marker { position: absolute; left: calc(-1 * var(--space-7) + 0.5rem); top: 0.5rem; width: 1.05rem; height: 1.05rem; margin-left: -0.525rem; border-radius: 50%; background: var(--bg); border: 1px solid var(--accent); transition: background-color 0.6s var(--ease-out) 0.3s, box-shadow 0.6s var(--ease-out) 0.3s; }
+  .node--now .marker { background: var(--warn); border-color: var(--warn); box-shadow: 0 0 0 5px color-mix(in srgb, var(--warn) 22%, transparent); }
+  @media (prefers-reduced-motion: no-preference) { :global(html.js) .node:not(.node--now):not(.is-in) .marker { background: var(--bg); } :global(html.js) .node.is-in:not(.node--now) .marker { background: var(--accent); } }
+  .body { display: grid; gap: var(--space-3); justify-items: start; }
+  .kicker { color: var(--accent); }
   .node--now .kicker { color: var(--warn); }
-  .body h3 { font-size: var(--step-3); }
-  .exit-label { margin-top: var(--space-3); color: var(--muted); font-weight: 600; }
-  .exit { padding: 0; list-style: none; display: grid; gap: var(--space-1); }
-  .exit li { padding-left: 1.2em; position: relative; }
-  .exit li::before { content: ''; position: absolute; left: 0; top: 0.8em; width: 0.6em; height: 1px; background: var(--accent); }
-  @media (min-width: 56rem) {
-    .timeline { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-5); }
-    .timeline::before { left: 0; right: 0; top: 0.85rem; bottom: auto; width: auto; height: 1px; }
-    .node { padding-left: 0; padding-top: var(--space-6); }
-    .marker { top: 0.35rem; }
-  }
+  .body h3 { font-size: clamp(2rem, 1.2rem + 2.6vw, 3.5rem); line-height: 1; letter-spacing: -0.02em; }
+  .body :global(.art) { max-height: 7rem; }
+  .body p.muted { max-width: 56ch; }
+  .exit-label { margin-top: var(--space-3); color: var(--muted); }
+  .exit { padding: 0; list-style: none; display: grid; gap: var(--space-2); }
+  .exit li { padding-left: 1.6em; position: relative; }
+  .exit li::before { content: ''; position: absolute; left: 0; top: 0.8em; width: 1em; height: 1px; background: var(--accent); }
 </style>

@@ -1,0 +1,46 @@
+---
+// Restore band: three REAL screens of the restore flow (preview, ready gate, result with Undo) from the demo site.
+// The badge is read from the feature registry. Honest limits are stated next to the screens.
+import ProductFrame from '../ProductFrame.astro';
+import StatusBadge from '../StatusBadge.astro';
+import SplitHeading from '../SplitHeading.astro';
+import { statusOf } from '../../lib/registry';
+import { shots } from '../../data/product';
+
+const steps = [
+  { n: '01', title: 'Preview, then type RESTORE', text: 'See sizes, disk need, warnings and what is never overwritten. Nothing changes yet.', shot: shots.restorePreview, cover: true, ratio: '4/3' },
+  { n: '02', title: 'Verified, then apply', text: 'The backup is downloaded and checked first. A second confirmation starts the change.', shot: shots.restoreReady },
+  { n: '03', title: 'Done, with Undo', text: 'Your database comes back from the safety snapshot and your files from the journal.', shot: shots.restoreResult, cover: true, ratio: '4/3' },
+];
+---
+
+<section class="section restore band-dark" aria-labelledby="restore-h">
+  <div class="container">
+    <div class="sec-head">
+      <p class="eyebrow" data-reveal>Restore</p>
+      <SplitHeading id="restore-h" class="h-xl" lines={['Restore with', 'a way back.']} />
+      <p class="lede" data-reveal>Whole site, database only or files only, from a backup of this site. <StatusBadge status={statusOf('restore-in-place')} /></p>
+    </div>
+    <ol role="list" class="rsteps" data-reveal="stagger">
+      {steps.map((s) => (
+        <li>
+          <span class="mono num">{s.n} / 03</span>
+          <h3>{s.title}</h3>
+          <p class="muted">{s.text}</p>
+          <ProductFrame src={s.shot.src} alt={s.shot.alt} caption={s.shot.caption} cover={s.cover} ratio={s.ratio} sizes="(min-width: 64rem) 420px, 92vw" widths={[480, 800, 1200]} glow={false} />
+        </li>
+      ))}
+    </ol>
+    <p class="note mono">Pre-alpha: restore replaces your live site, so try it on a copy first. It cannot restore an uploaded archive or move a site to another domain yet.</p>
+  </div>
+</section>
+
+<style>
+  .rsteps { padding: 0; display: grid; gap: var(--space-7); grid-template-columns: minmax(0, 1fr); align-items: start; }
+  .rsteps > li { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+  .num { color: var(--accent); }
+  .rsteps h3 { font-size: clamp(1.4rem, 1.15rem + 0.9vw, 1.85rem); line-height: 1.1; }
+  .rsteps p { max-width: 34ch; }
+  .note { margin-top: var(--space-6); color: var(--muted); max-width: none; text-transform: none; letter-spacing: 0.02em; }
+  @media (min-width: 60rem) { .rsteps { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-6); } }
+</style>

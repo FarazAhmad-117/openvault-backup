@@ -7,7 +7,10 @@
         "/download/",
         "/google-drive/",
         "/s3-r2/cloudflare-r2/",
-        "/compare/updraftplus/"
+        "/compare/updraftplus/",
+        "/features/",
+        "/how-it-works/",
+        "/restore-and-migrate/"
       ],
       "numberOfRuns": 1,
       "settings": { "chromeFlags": "--no-sandbox --headless=new" }

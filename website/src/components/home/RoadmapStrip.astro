@@ -1,0 +1,54 @@
+---
+// "Coming, not built": planned features with illustrations, clearly labelled. Counts and badges come from the registry.
+import StatusBadge from '../StatusBadge.astro';
+import SplitHeading from '../SplitHeading.astro';
+import Rewind from '../art/Rewind.astro';
+import Folder from '../art/Folder.astro';
+import Clock from '../art/Clock.astro';
+import Drive from '../art/Drive.astro';
+import ShieldLock from '../art/ShieldLock.astro';
+import { features } from '../../data/features';
+import { statusOf } from '../../lib/registry';
+import { countByStatus } from '../../lib/status';
+
+const counts = countByStatus(features);
+const items = [
+  { title: 'Schedules', text: 'Hourly to monthly, then retention rules.', id: 'backup-scheduled', art: Clock },
+  { title: 'Google Drive', text: 'Your own OAuth app, drive.file scope only.', id: 'destination-gdrive', art: Drive },
+  { title: 'Archive encryption', text: 'AES-256 before a backup leaves your server.', id: 'encryption', art: ShieldLock },
+  { title: 'Restore from an upload', text: 'Restore a downloaded archive, not just one in your history.', id: 'restore-upload', art: Rewind },
+  { title: 'Migration', text: 'Another domain or table prefix, with safe search and replace.', id: 'migration', art: Folder },
+];
+---
+
+<section class="section band-dark" aria-labelledby="soon-h">
+  <div class="container">
+    <div class="sec-head">
+      <p class="eyebrow" data-reveal>Coming, not built</p>
+      <SplitHeading id="soon-h" class="h-xl" lines={['Next on the', 'workbench.']} />
+      <p class="lede" data-reveal>None of this works in a release yet. Do not plan around it.</p>
+    </div>
+    <ul role="list" class="soon" data-reveal="stagger">
+      {items.map((c) => (
+        <li>
+          <article class="card card--planned">
+            <div class="art-wrap art--planned" aria-hidden="true"><c.art /></div>
+            <h3>{c.title}</h3>
+            <p>{c.text}</p>
+            <StatusBadge status={statusOf(c.id)} />
+          </article>
+        </li>
+      ))}
+    </ul>
+    <p class="foot mono" data-reveal>{counts.available} of {features.length} tracked features available in a release, {counts.planned} planned. <a class="link" href="/roadmap/" data-cursor="Read">Read the roadmap</a></p>
+  </div>
+</section>
+
+<style>
+  .soon { padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .soon > li { display: grid; }
+  .soon :global(.art) { max-height: 9rem; }
+  .foot { margin-top: var(--space-6); color: var(--muted); max-width: none; text-transform: none; letter-spacing: 0.02em; }
+  @media (min-width: 40rem) { .soon { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .soon { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+</style>

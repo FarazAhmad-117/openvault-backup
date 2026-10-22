@@ -32,6 +32,7 @@ namespace OpenVault\Backup\Destinations\Local;
 use OpenVault\Backup\Destinations\DestinationException;
 use OpenVault\Backup\Destinations\DestinationInterface;
 use OpenVault\Backup\Destinations\RemotePath;
+use OpenVault\Backup\Destinations\ResumableDownloadInterface;
 use OpenVault\Backup\Destinations\TestResult;
 use OpenVault\Backup\Destinations\UploadProgress;
 use OpenVault\Backup\Engine\Budget;
@@ -43,7 +44,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * Local folder destination.
  */
-class LocalDestination implements DestinationInterface {
+class LocalDestination implements DestinationInterface, ResumableDownloadInterface {
 
 	const CHUNK      = 1048576;
 	const HASH_LIMIT = 268435456;
@@ -323,12 +324,29 @@ class LocalDestination implements DestinationInterface {
 	 * @throws DestinationException When missing or unreadable.
 	 */
 	public function download( $remote_ref, callable $sink ) {
+		$this->download_from( $remote_ref, 0, $sink );
+	}
+
+	/**
+	 * Stream a stored file starting at a byte offset.
+	 *
+	 * @param string   $remote_ref Reference.
+	 * @param int      $offset     First byte to send.
+	 * @param callable $sink       Receives chunks; false stops.
+	 * @return void
+	 * @throws DestinationException When missing or unreadable.
+	 */
+	public function download_from( $remote_ref, $offset, callable $sink ) {
 		$target = $this->locate( $remote_ref );
 		if ( ! is_file( $target ) ) {
 			throw DestinationException::permanent( __( 'The file does not exist in the folder.', 'openvault-backup' ) );
 		}
 		$in = @fopen( $target, 'rb' );
 		if ( false === $in ) {
+			throw DestinationException::permanent( __( 'The file could not be read.', 'openvault-backup' ) );
+		}
+		if ( (int) $offset > 0 && 0 !== fseek( $in, (int) $offset ) ) {
+			fclose( $in );
 			throw DestinationException::permanent( __( 'The file could not be read.', 'openvault-backup' ) );
 		}
 		try {

@@ -1,0 +1,28 @@
+---
+// Decorative combination dial (SVG). Used by the preloader and the closing CTA.
+// Parts: .ring (circles), .ticks (one compound path, pathLength=1 so it can be drawn in), .spin (rotating group), .ptr, .lock (flash ring).
+interface Props { class?: string }
+const { class: cls } = Astro.props;
+const C = 100;
+const polar = (r: number, deg: number) => {
+  const a = ((deg - 90) * Math.PI) / 180;
+  return [C + r * Math.cos(a), C + r * Math.sin(a)] as const;
+};
+const ticks = Array.from({ length: 60 }, (_, i) => {
+  const [x1, y1] = polar(i % 5 === 0 ? 70 : 76, i * 6);
+  const [x2, y2] = polar(84, i * 6);
+  return `M${x1.toFixed(1)} ${y1.toFixed(1)}L${x2.toFixed(1)} ${y2.toFixed(1)}`;
+}).join('');
+---
+
+<svg class={cls} viewBox="0 0 200 200" aria-hidden="true" focusable="false">
+  <circle class="ring" cx="100" cy="100" r="96" />
+  <circle class="ring" cx="100" cy="100" r="62" />
+  <circle class="lock" cx="100" cy="100" r="90" />
+  <g class="spin">
+    <path class="ticks" d={ticks} pathLength="1" />
+    <circle class="ring" cx="100" cy="100" r="88" />
+  </g>
+  <path class="ptr" d="M100 4l6 -10h-12z" transform="translate(0 6)" />
+  <circle class="ring" cx="100" cy="100" r="6" />
+</svg>

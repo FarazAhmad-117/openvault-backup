@@ -1,0 +1,121 @@
+---
+// Reusable pinned scroll scene in the vocabulary of the home "How a backup travels": a path draws in with scroll,
+// nodes light up in order and the matching step opens. --p / data-stage come from src/motion/scrub.ts.
+// Without JS or with reduced motion every step is listed in full and the path is fully drawn.
+// Statuses come from the feature registry; `planned` draws dashed (not built) nodes.
+import StatusBadge from './StatusBadge.astro';
+import { statusOf } from '../lib/registry';
+
+interface Step { label: string; title: string; text: string; id: string }
+interface Props { id: string; eyebrow: string; heading: string; steps: Step[]; planned?: boolean; note?: string }
+const { id, eyebrow, heading, steps, planned = false, note } = Astro.props;
+const n = steps.length;
+const pts = steps.map((_, i) => [60 + (i * 520) / (n - 1), i % 2 ? 240 : 140] as const);
+const d = pts.reduce((acc, [x, y], i) => {
+  if (i === 0) return `M${x} ${y}`;
+  const [px, py] = pts[i - 1];
+  const mx = (px + x) / 2;
+  return `${acc} C ${mx} ${py} ${mx} ${y} ${x} ${y}`;
+}, '');
+// One rule set per stage index (CSS cannot loop): the open step, its title colour and the node halo.
+const rules = Array.from({ length: n }, (_, k) =>
+  `html .pf.pf-${id}[data-stage='${k}'] .s${k} .more{grid-template-rows:1fr}html .pf.pf-${id}[data-stage='${k}'] .s${k} .head h3{color:var(--text)}html .pf.pf-${id}[data-stage='${k}'] .n${k} .halo{opacity:1}html .pf.pf-${id}[data-stage='${k}'] .s${k}{display:block;border-bottom:1px solid var(--line-strong)}`).join('');
+---
+
+<section class={`pf pf-${id}${planned ? ' pf--planned' : ''}`} data-scrub="track" data-stages={n} style={`--n:${n}`} aria-labelledby={`${id}-h`}>
+  <div class="stage">
+    <div class="container grid">
+      <div class="copy">
+        <p class="eyebrow">{eyebrow}</p>
+        <h2 id={`${id}-h`} class="h">{heading}</h2>
+        <ol role="list" class="steps">
+          {steps.map((s, i) => (
+            <li class={`step s${i}`}>
+              <div class="head">
+                <span class="mono n">{String(i + 1).padStart(2, '0')}</span>
+                <h3>{s.title}</h3>
+                <StatusBadge status={statusOf(s.id)} />
+              </div>
+              <div class="more"><p class="muted">{s.text}</p></div>
+            </li>
+          ))}
+        </ol>
+      </div>
+      <div class="diagram">
+        <svg viewBox="0 0 640 380" aria-hidden="true" focusable="false">
+          <path class="rail" d={d} pathLength="1" />
+          <path class="line" d={d} pathLength="1" />
+          {pts.map(([x, y], i) => (
+            <g class={`node n${i}`} style={`--t:${(i / n).toFixed(3)}`} transform={`translate(${x} ${y})`}>
+              <circle class="halo" r="26" />
+              <circle class="ring" r="15" />
+              <circle class="dot" r="5" />
+              <text class="lbl" y={y > 190 ? 50 : -34} text-anchor="middle">{steps[i].label}</text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  </div>
+  <style set:html={rules} />
+</section>
+{note && <div class="container pf-note"><p class="small muted">{note}</p></div>}
+
+<style>
+  .pf { --p: 1; position: relative; border-block: 1px solid var(--line); background: var(--surface); }
+  .stage { padding-block: var(--space-9); }
+  .grid { display: grid; gap: var(--space-7); align-items: center; }
+  .h { font-size: clamp(2.25rem, 1.2rem + 4.2vw, 5rem); line-height: 0.98; margin: var(--space-3) 0 var(--space-6); max-width: 12ch; }
+  .steps { padding: 0; display: grid; }
+  .step { border-top: 1px solid var(--line-strong); padding-block: var(--space-4); }
+  .step:last-child { border-bottom: 1px solid var(--line-strong); }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-4); }
+  .n { color: var(--accent); }
+  .head h3 { font-size: var(--step-2); }
+  .head :global(.badge) { margin-left: auto; }
+  .more p { margin-top: var(--space-2); max-width: 46ch; }
+  .pf-note { padding-block: var(--space-6) 0; }
+  .pf-note p { max-width: 62ch; }
+
+  svg { width: 100%; height: auto; overflow: visible; }
+  .rail { fill: none; stroke: var(--line-strong); stroke-width: 1.5; }
+  .line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; filter: drop-shadow(0 0 6px rgb(224 164 88 / 0.6)); }
+  .halo { fill: var(--glow); opacity: 0; transition: opacity 0.5s; }
+  .ring { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+  .dot { fill: var(--accent); }
+  .lbl { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; fill: var(--text); }
+  .pf--planned .line { stroke: var(--soft); stroke-dasharray: 0.012 0.02; filter: none; }
+  .pf--planned .ring { stroke: var(--soft); stroke-dasharray: 3 4; }
+  .pf--planned .dot { fill: var(--soft); }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.js .pf) { --p: 0; height: calc(var(--n, 6) * 66svh + 70svh); padding: 0; }
+    :global(html.js .pf .stage) { position: sticky; top: 0; height: 100svh; padding-block: 5rem var(--space-6); display: grid; align-items: center; }
+    :global(html.js .pf:not(.pf--planned) .line) { stroke-dashoffset: calc(1 - clamp(0, calc(var(--p) / 0.9), 1)); }
+    :global(html.js .pf--planned .line) { opacity: clamp(0.15, calc(var(--p) * 1.2), 1); }
+    :global(html.js .pf .node) { --on: clamp(0, calc((var(--p) / 0.9 - var(--t)) * 40), 1); }
+    :global(html.js .pf .node .ring), :global(html.js .pf .node .dot), :global(html.js .pf .node .lbl) { opacity: calc(0.3 + var(--on) * 0.7); }
+    :global(html.js .pf .node .dot) { transform-box: fill-box; transform-origin: center; transform: scale(calc(0.4 + var(--on) * 0.6)); }
+    :global(html.js .pf .more) { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.5s var(--ease-out); }
+    :global(html.js .pf .more > p) { overflow: hidden; min-height: 0; margin-top: 0; }
+    :global(html.js .pf .step .head h3) { color: var(--dim); transition: color 0.4s; }
+    :global(html.js .pf:not([data-stage]) .s0 .more) { grid-template-rows: 1fr; }
+    :global(html.js .pf:not([data-stage]) .s0 .head h3) { color: var(--text); }
+    :global(html.js .pf:not([data-stage]) .n0 .halo) { opacity: 1; }
+  }
+  @media (min-width: 60rem) {
+    .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-8); }
+  }
+  @media (max-width: 59.99rem) {
+    .lbl { display: none; }
+    @media (prefers-reduced-motion: no-preference) {
+      :global(html.js .pf .stage) { padding-top: 4.5rem; }
+      :global(html.js .pf .grid) { gap: var(--space-4); }
+      :global(html.js .pf .h) { font-size: 2.25rem; margin-bottom: var(--space-3); }
+      :global(html.js .pf .diagram) { order: -1; }
+      :global(html.js .pf .copy .eyebrow) { display: none; }
+      :global(html.js .pf .step) { display: none; }
+      :global(html.js .pf:not([data-stage]) .s0) { display: block; border-bottom: 1px solid var(--line-strong); }
+    }
+  }
+</style>

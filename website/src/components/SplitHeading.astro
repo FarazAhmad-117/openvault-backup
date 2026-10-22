@@ -1,0 +1,18 @@
+---
+// Headline split into lines at BUILD time. The real text stays in the DOM, in order, inside one heading,
+// so assistive tech reads it once. `now` plays on load (hero); otherwise it reveals when scrolled into view.
+interface Props {
+  lines: string[];
+  as?: 'h1' | 'h2' | 'h3' | 'p';
+  class?: string;
+  now?: boolean;
+  delay?: number;
+  id?: string;
+}
+const { lines, as: Tag = 'h2', class: cls, now = false, delay, id } = Astro.props;
+const attrs = now ? { 'data-reveal-now': 'lines' } : { 'data-reveal': 'lines', 'data-reveal-delay': delay };
+---
+
+<Tag class={cls} id={id} {...attrs}>
+  {lines.map((l, i) => (<><span class="ln"><span class="ln-i" style={`--i:${i}`}>{l}</span></span>{' '}</>))}
+</Tag>

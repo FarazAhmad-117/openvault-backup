@@ -15,6 +15,7 @@ namespace OpenVault\Backup\Core;
 
 use OpenVault\Backup\Engine\JobRunner;
 use OpenVault\Backup\Engine\OptionsLockStore;
+use OpenVault\Backup\Restore\MaintenanceMode;
 
 defined( 'ABSPATH' ) || exit;
 
@@ -40,6 +41,9 @@ class Deactivator {
 
 		// A job that was running cannot continue while the plugin is off, so its lock is released.
 		( new OptionsLockStore() )->clear_all();
+
+		// The maintenance page of a restore only exists while the plugin runs.
+		( new MaintenanceMode() )->disable();
 
 		// Forget the "recovery action is scheduled" check so reactivation schedules it again.
 		delete_option( JobRunner::OPTION_RECOVERY_CHECKED );

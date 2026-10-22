@@ -2,58 +2,83 @@
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
 import StatusBadge from '../components/StatusBadge.astro';
+import PinnedFlow from '../components/PinnedFlow.astro';
+import ProductFrame from '../components/ProductFrame.astro';
+import Icon from '../components/Icon.astro';
 import { siteUrl } from '../config/site';
 import { statusOf } from '../lib/registry';
 import { features } from '../data/features';
+import { shots } from '../data/product';
 import { faqPage, breadcrumbs } from '../lib/jsonld';
 
-const description = 'How OpenVault Backup is designed to restore or migrate a WordPress site from backup, with a safety snapshot. Pre-alpha: restore does not work yet.';
+const description = 'Restore a WordPress site from its OpenVault backup history, with a safety snapshot and Undo. Pre-alpha: no upload restore or migration yet.';
 const trail = [{ name: 'Home', path: '/' }, { name: 'Restore & migrate', path: '/restore-and-migrate/' }];
 const phaseOf = (id: string) => features.find((x) => x.id === id)!.phase;
 
-interface Item { title: string; text: string; id: string; phase?: string }
+interface Item { title: string; text: string; id: string }
 const items: Item[] = [
-  { title: 'Restore from history', id: 'restore-in-place', text: 'Pick a backup from your history, local or at any destination, and restore it in place. Parts are downloaded and checked against SHA-256 checksums first, and you are asked for the password if the archive is encrypted.' },
-  { title: 'Full, database-only or files-only', id: 'restore-in-place', text: 'You see what will be restored, then choose a full restore, the database only, or files only.' },
-  { title: 'A safety snapshot first', id: 'restore-in-place', text: 'Before anything is overwritten, the current database and affected folders are snapshotted. Maintenance mode switches on with a 30 minute failsafe, and the result page offers an Undo restore that uses the snapshot.' },
-  { title: 'The plugin protects itself', id: 'restore-in-place', text: 'Its own tables, settings and credentials are exported before a database import and re-applied afterwards. The plugin folder is never overwritten, and the running restore job survives the database swap. Expect to log in again afterwards.' },
-  { title: 'Restore from an uploaded archive', id: 'restore-upload', text: 'Upload an archive in chunks from your browser, or place it on the server by FTP and scan the folder.' },
-  { title: 'Remote re-indexing from manifest.json', id: 'restore-upload', text: 'On a fresh install, the plugin reads the manifest.json stored next to each backup at your destination and rebuilds your history, so a lost site is not a lost backup.' },
-  { title: 'Selective restore', id: 'restore-upload', phase: 'Phase 2', text: 'Restore a single plugin, theme or folder instead of the whole site. This has no separate status entry yet, so the Phase 2 badge shown is the nearest registry entry, restore from upload.' },
-  { title: 'Migration with safe search and replace', id: 'migration', text: 'Move to a new host or domain, rewriting URLs in the database in a way that is safe for serialized data.' },
-  { title: 'A standalone restorer', id: 'migration', phase: 'Phase 3', text: 'A restorer that works when wp-admin is broken. It has no separate status entry yet, so the Phase 3 badge shown is the nearest registry entry, migration.' },
+  { title: 'Restore from history', id: 'restore-in-place', text: 'Pick a backup of this site from your history, from the local copy or any destination. Parts are downloaded and checked against their SHA-256 checksums before anything changes.' },
+  { title: 'Whole site, database only or files only', id: 'restore-in-place', text: 'A preview shows sizes, disk need and warnings first. You type RESTORE to start and confirm a second time before the change is applied.' },
+  { title: 'A safety snapshot first', id: 'restore-in-place', text: 'Before the database is replaced, a real locked database backup is taken. If it fails, the restore stops before anything changes.' },
+  { title: 'Undo restore', id: 'restore-in-place', text: 'The database comes back from the snapshot and files from a rollback journal. Undoing the database also discards everything written since the restore.' },
+  { title: 'The plugin protects itself', id: 'restore-in-place', text: 'Its own settings, locks, credentials and active state survive a database import. Its own folder and backup folder are never overwritten.' },
+  { title: 'An untrusted dump, safely extracted', id: 'restore-in-place', text: 'The database dump is checked line by line against a strict whitelist. Files are extracted with no ../, no symlinks and never over wp-config.php or server config files.' },
+  { title: 'Restore from an uploaded archive', id: 'restore-upload', text: 'Upload an archive in chunks, or scan a folder on the server. Not built: only backups in your history can be restored today.' },
+  { title: 'Migration with safe search and replace', id: 'migration', text: 'Move to a new host, domain or table prefix, rewriting URLs safely. Not built: a different table prefix is refused, and a different site URL needs an acknowledgement and keeps its old URLs.' },
+];
+const icons = ['rewind', 'scan', 'shield', 'rewind', 'lock', 'file', 'archive', 'server'];
+
+const safety = [
+  { label: 'Preview', title: 'Preview and type RESTORE', text: 'See what will change and what is never overwritten. Nothing is created until you type RESTORE.', id: 'restore-in-place' },
+  { label: 'Verify', title: 'Download and verify', text: 'The parts are downloaded to a temp folder and checked against their SHA-256 checksums. The site is untouched.', id: 'restore-in-place' },
+  { label: 'Apply', title: 'Confirm a second time', text: 'A final summary and a second RESTORE confirmation, Apply restore now, start the change.', id: 'restore-in-place' },
+  { label: 'Snapshot', title: 'Take a safety snapshot', text: 'A locked database backup is made first. If it fails, the restore stops before anything changes.', id: 'restore-in-place' },
+  { label: 'Import', title: 'Import, protecting the plugin', text: 'Visitors see a 503 maintenance page (30 minute failsafe). The dump is validated, then imported in resumable slices. The plugin keeps its own settings.', id: 'restore-in-place' },
+  { label: 'Files', title: 'Extract files, with a journal', text: 'Files are extracted safely and every file that is overwritten is saved in a rollback journal. Files that are not in the backup are not deleted.', id: 'restore-in-place' },
+  { label: 'Undo', title: 'Result and Undo', text: 'Maintenance switches off and the result page offers Undo restore and Dismiss undo data.', id: 'restore-in-place' },
+];
+
+const notBuilt = [
+  'Restoring an uploaded archive or a folder on the server. Only backups in your history work.',
+  'Migration: a different table prefix is refused, and a backup from a different site URL needs an explicit acknowledgement and keeps its old URLs. Search and replace is planned.',
+  'Multisite networks are refused.',
+  'Encrypted archives do not exist yet.',
+  'wp-config.php is never restored, and files that are not in the backup are not deleted.',
+  'Very large sites restore slowly: a tar.gz part is re-read for every slice.',
 ];
 
 const faqs = [
-  { q: 'Can I restore a WordPress site with OpenVault today?', a: 'No. OpenVault Backup is pre-alpha: it can back up to your server and to S3-compatible storage or a folder and let you download them, but it cannot restore yet. Keep using your current backup solution, and do not delete existing backups because of this plugin.' },
-  { q: 'What happens to the plugin itself when a restore replaces my database?', a: 'By design, the plugin exports its own tables, settings and destination credentials before a database import and re-applies them afterwards, and it never overwrites its own folder. This is a design, not a shipped feature.' },
-  { q: 'Can OpenVault move my site to a new domain?', a: 'Not yet. Migration with serialized-safe search and replace is planned for Phase 3, and nothing in the plugin does it today.' },
+  { q: 'Can I restore a WordPress site with OpenVault today?', a: 'Yes, in pre-alpha, for a backup of the same site in your history: whole site, database only or files only, with a safety snapshot first and an Undo afterwards. Restore replaces your live site, so try it on a copy first, and keep your current backup solution.' },
+  { q: 'Is restore safe?', a: 'It is built to be careful, but it is pre-alpha. It never overwrites wp-config.php, the plugin itself or server config files, and Undo puts the database and files back. Undoing the database also discards anything written after the restore. Try it on a copy of your site first.' },
+  { q: 'What happens to the plugin itself when a restore replaces my database?', a: 'The plugin keeps its own settings, locks, credentials and active state across the import, and never overwrites its own folder. You may still be logged out when the users table is replaced; progress continues on a read-only status link.' },
+  { q: 'Can OpenVault move my site to a new domain?', a: 'Not yet. A different table prefix is refused, and a backup from a different site URL needs an acknowledgement and keeps its old URLs. Migration with serialized-safe search and replace is planned for Phase 3.' },
 ];
 ---
 
 <Base title="Restore or migrate a WordPress site from backup" description={description} path="/restore-and-migrate/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Restore & migrate" path="/restore-and-migrate/" title="Restore or migrate a WordPress site from backup">
-    <p>OpenVault Backup is being built so a restore is safe to attempt: it snapshots your site first and protects its own settings.</p>
-    <p class="status-line"><StatusBadge status={statusOf('restore-in-place')} /> <span class="small">Pre-alpha: restore does not work yet. This page describes the design.</span></p>
+    <p>Restore a backup of this site from your history, with a safety snapshot first and an Undo afterwards. Migration to another domain is not built yet.</p>
+    <p class="status-line"><StatusBadge status={statusOf('restore-in-place')} /> <span class="small">Pre-alpha: restore works in 0.3.0. Try it on a copy of your site first.</span></p>
+    <div slot="visual"><ProductFrame {...shots.restoreChoose} eager sizes="(min-width: 64rem) 560px, 92vw" widths={[480, 800, 1200]} tilt /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <div class="warn-box" role="note">
-        <h2>Restore does not work yet</h2>
-        <p>The plugin cannot restore or migrate a site today; a downloaded backup can only be unpacked by hand. Keep using your current backup solution, and do not delete any other backup because of it.</p>
+      <div class="warn-box" role="note" data-reveal>
+        <h2>Restore replaces your live site</h2>
+        <p>It is pre-alpha. Try it on a copy of your site first, keep your current backups, and do not delete any other backup because of this plugin. It cannot restore an uploaded archive or move a site to another domain.</p>
       </div>
 
-      <h2 class="sec-title">How it is designed to work</h2>
-      <ol role="list" class="ledger">
+      <div class="stack"><p class="eyebrow" data-reveal>What it does</p><h2 class="sec-title" data-reveal>Restore, and what is still ahead</h2></div>
+      <ol role="list" class="cards" data-reveal="stagger">
         {items.map((it, i) => (
-          <li class="row">
-            <span class="num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+          <li class={`card row ${statusOf(it.id) === 'planned' ? 'card--planned' : ''}`}>
+            <span class="card-ico"><Icon name={icons[i]} size={22} /></span>
             <div class="body">
               <h3>{it.title}</h3>
-              <p class="muted">{it.text}</p>
+              <p>{it.text}</p>
             </div>
-            <div class="tag"><StatusBadge status={statusOf(it.id)} /> <span class="small muted">{it.phase ?? phaseOf(it.id)}</span></div>
+            <div class="tag"><StatusBadge status={statusOf(it.id)} /> <span class="small muted">{phaseOf(it.id)}</span></div>
           </li>
         ))}
       </ol>
@@ -61,25 +86,36 @@ const faqs = [
   </section>
 
   <section class="section section--surface">
+    <div class="container stack-lg">
+      <div class="stack"><p class="eyebrow" data-reveal>Real screens</p><h2 class="sec-title" data-reveal>Three steps you will see</h2></div>
+      <ol role="list" class="shots" data-reveal="stagger">
+        <li><ProductFrame src={shots.restorePreview.src} alt={shots.restorePreview.alt} caption={shots.restorePreview.caption} cover ratio="4/3" sizes="(min-width: 64rem) 420px, 92vw" widths={[480, 800, 1200]} glow={false} /></li>
+        <li><ProductFrame {...shots.restoreReady} sizes="(min-width: 64rem) 420px, 92vw" widths={[480, 800, 1200]} glow={false} /></li>
+        <li><ProductFrame src={shots.restoreResult.src} alt={shots.restoreResult.alt} caption={shots.restoreResult.caption} cover ratio="4/3" sizes="(min-width: 64rem) 420px, 92vw" widths={[480, 800, 1200]} glow={false} /></li>
+      </ol>
+      <p class="small muted">Screens are from a demo site with example data.</p>
+    </div>
+  </section>
+
+  <PinnedFlow id="safety" eyebrow="The safety model" heading="Snapshot first, then restore" steps={safety} note="This is the order of a restore in 0.3.0. It is pre-alpha: each part is covered by automated tests and Docker runs, not by years of real sites." />
+
+  <section class="section">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">Edge cases on the list</h2>
+        <h2 class="sec-title" data-reveal>What is not built</h2>
       </div>
       <div class="stack">
         <ul class="bul">
-          <li class="muted">A different table prefix in the backup than on the site.</li>
-          <li class="muted">A backup made by a newer plugin version than the one opening it.</li>
-          <li class="muted">Not enough disk space to download and extract, which a preflight check is meant to catch.</li>
-          <li class="muted">A backup from a different domain, which belongs to migration.</li>
+          {notBuilt.map((t) => <li class="muted">{t}</li>)}
         </ul>
-        <p class="muted">See the <a class="link" href="/security/">security design</a> and the <a class="link" href="/roadmap/">roadmap</a> for where each part stands. Looking at alternatives that work today? Read <a class="link" href="/compare/">how OpenVault compares</a>.</p>
+        <p class="muted">See the <a class="link" href="/security/">security design</a> and the <a class="link" href="/roadmap/">roadmap</a> for where each part stands. Looking at alternatives? Read <a class="link" href="/compare/">how OpenVault compares</a>.</p>
       </div>
     </div>
   </section>
 
   <section class="section">
     <div class="container two">
-      <div class="stack"><h2 class="sec-title">Questions</h2></div>
+      <div class="stack"><h2 class="sec-title" data-reveal>Questions</h2></div>
       <div class="stack-lg">
         {faqs.map((f) => (
           <div class="qa">
@@ -93,21 +129,22 @@ const faqs = [
 </Base>
 
 <style>
-  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
-  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
-  .row { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
-  .num { font-family: var(--font-display); font-size: var(--step-3); line-height: 1; color: var(--accent); }
+  .cards { padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .cards > li { display: grid; }
   .body { display: grid; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; }
-  .body h3 { font-size: var(--step-1); }
-  .body p { max-width: 60ch; }
+  .body h3 { font-size: var(--step-2); line-height: 1.15; }
+  .body p { max-width: none; }
   .tag { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); align-content: start; }
+  .shots { padding: 0; display: grid; gap: var(--space-5); grid-template-columns: minmax(0, 1fr); align-items: start; }
+  @media (min-width: 60rem) { .shots { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
   .bul { padding-left: 1.2em; display: grid; gap: var(--space-2); max-width: 60ch; list-style: disc; }
   .qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
-  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
+  
   @media (min-width: 48rem) {
-    .row { grid-template-columns: 4rem minmax(0, 1fr) 14rem; align-items: start; }
+    .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
+  @media (min-width: 64rem) { .cards { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
   @media (min-width: 60rem) {
     .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
   }

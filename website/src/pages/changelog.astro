@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
+import Seal from '../components/art/Seal.astro';
 import { repoUrl, siteUrl } from '../config/site';
 import { breadcrumbs } from '../lib/jsonld';
 
@@ -41,11 +42,17 @@ if (raw) {
 
 // Split on backticks so inline code renders as <code> without raw HTML.
 const parts = (s: string) => s.split('`');
+// Big mono version token ("0.3.0", "Unreleased") plus the rest of the heading as a small label; other headings stay whole.
+const headParts = (h: string) => {
+  const m = /^(v?\d+(?:\.\d+)+|Unreleased)\b[\s:-]*(.*)$/i.exec(h);
+  return m ? { big: m[1], rest: m[2], version: true } : { big: h, rest: '', version: false };
+};
 ---
 
 <Base title="Changelog" description={description} path="/changelog/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Changelog" path="/changelog/" title="What changed, and when">
-    <p>Read from the project's CHANGELOG.md when this site is built. The plugin is pre-alpha: 0.2.0 can back up to your server, S3-compatible storage or a folder, with no restore yet.</p>
+    <p>Read from the project's CHANGELOG.md when this site is built. The plugin is pre-alpha: 0.3.0 can back up to your server, S3-compatible storage or a folder and restore a backup of this site with undo, but it has no schedules yet.</p>
+    <div slot="visual" aria-hidden="true"><Seal /></div>
   </PageHead>
 
   <section class="section">
@@ -56,11 +63,12 @@ const parts = (s: string) => s.split('`');
           <p>You can read it on <a href={`${repoUrl()}/blob/main/CHANGELOG.md`} rel="noopener">GitHub</a>.</p>
         </div>
       ) : (
-        <div class="log">
+        <div class="log" data-scrub="pass">
           {sections.map((s) => (
-            <section class="entry">
-              <h2>{s.heading}</h2>
-              <ul class="prose">
+            <section class="entry" data-reveal>
+              <span class="node" aria-hidden="true"></span>
+              <h2 class={headParts(s.heading).version ? 'ver' : 'ver ver--text'}><span class="v">{headParts(s.heading).big}</span>{headParts(s.heading).rest && <>{' '}<span class="mono vsub">{headParts(s.heading).rest}</span></>}</h2>
+              <ul class="prose items">
                 {s.items.map((it) => (
                   <li>{parts(it).map((t, i) => (i % 2 ? <code>{t}</code> : t))}</li>
                 ))}
@@ -74,14 +82,23 @@ const parts = (s: string) => s.split('`');
 </Base>
 
 <style>
-  .log { display: grid; gap: var(--space-8); }
-  .entry { display: grid; gap: var(--space-4) var(--space-7); border-top: 1px solid var(--line-strong); padding-top: var(--space-5); }
-  .entry h2 { font-size: var(--step-3); color: var(--accent); }
-  .entry ul { max-width: var(--measure); padding-left: 1.3em; }
+  .log { --p: 1; position: relative; display: grid; gap: var(--space-8); padding-left: var(--space-7); }
+  .log::before, .log::after { content: ''; position: absolute; left: 0.5rem; top: 0.5rem; bottom: 0.5rem; width: 1px; background: var(--line-strong); }
+  .log::after { background: var(--accent); transform-origin: top; transform: scaleY(var(--p)); }
+  @media (prefers-reduced-motion: no-preference) { :global(html.js) .log { --p: 0; } :global(html.js) .log::after { transform: scaleY(clamp(0, calc(var(--p) * 1.12), 1)); } }
+  .entry { position: relative; display: grid; gap: var(--space-4) var(--space-7); padding: var(--space-5); border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: linear-gradient(180deg, var(--surface-2), var(--surface)); min-width: 0; }
+  .node { position: absolute; left: calc(-1 * var(--space-7) + 0.5rem); top: 0.9rem; width: 0.75rem; height: 0.75rem; margin-left: -0.375rem; border-radius: 50%; background: var(--bg); border: 1px solid var(--accent); }
+  .entry:first-child .node { background: var(--accent); box-shadow: 0 0 0 5px rgb(224 164 88 / 0.18); }
+  .ver { display: grid; gap: var(--space-2); align-content: start; font-weight: 400; }
+  .v { font-family: var(--font-mono); font-size: clamp(1.75rem, 1rem + 2.2vw, 2.75rem); line-height: 1.05; color: var(--accent); letter-spacing: 0; overflow-wrap: break-word; }
+  .vsub { color: var(--muted); }
+  .ver--text .v { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.15; color: var(--text); }
+  .items { max-width: var(--measure); padding-left: 1.3em; min-width: 0; overflow-wrap: anywhere; }
+  .entry > * { min-width: 0; }
   .entry li + li { margin-top: 0.6em; }
   .entry li::marker { color: var(--accent); }
   @media (min-width: 56rem) {
-    .entry { grid-template-columns: 11rem minmax(0, 1fr); }
-    .entry h2 { position: sticky; top: 6rem; align-self: start; font-size: var(--step-2); }
+    .entry { grid-template-columns: 14rem minmax(0, 1fr); padding: var(--space-6); }
+    .ver { position: sticky; top: 6rem; align-self: start; }
   }
 </style>

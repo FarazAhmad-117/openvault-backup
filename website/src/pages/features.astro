@@ -2,23 +2,36 @@
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
 import FeatureGrid from '../components/FeatureGrid.astro';
-import { SITE_NAME, siteUrl } from '../config/site';
+import ProductFrame from '../components/ProductFrame.astro';
+import Bento from '../components/home/Bento.astro';
+import SplitHeading from '../components/SplitHeading.astro';
+import { PLUGIN_VERSION, siteUrl } from '../config/site';
+import { features } from '../data/features';
+import { countByStatus } from '../lib/status';
 import { breadcrumbs } from '../lib/jsonld';
+import { shots } from '../data/product';
 
-const description = 'Every OpenVault Backup feature, grouped by release phase, each with its real status. Nothing is marked available until it ships.';
+const description = 'Every OpenVault Backup feature, grouped by release phase, each with its real status. Nothing is marked available until it ships in a release.';
 const trail = [{ name: 'Home', path: '/' }, { name: 'Features', path: '/features/' }];
+const counts = countByStatus(features);
 ---
 
 <Base title="Features" description={description} path="/features/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
-  <PageHead crumb="Features" path="/features/" title="What it is being built to do">
-    <p>{SITE_NAME} is free and open source, with every feature available to everyone. This is the full list, grouped by release phase.</p>
-    <p>Each item carries its real status. Nothing is marked Available until it works in a released build, and today that is nothing.</p>
+  <PageHead crumb="Features" path="/features/" title="What it does, honestly">
+    <p>In {PLUGIN_VERSION}, {counts.available} of {features.length} tracked features work in a release. The rest are marked, never hidden.</p>
+    <div slot="visual"><ProductFrame {...shots.form} eager sizes="(min-width: 64rem) 480px, 92vw" tilt /></div>
   </PageHead>
 
-  <section class="section">
+  <Bento />
+
+  <section class="section band-dark">
     <div class="container stack-lg">
+      <div class="sec-head">
+        <p class="eyebrow" data-reveal>The full list</p>
+        <SplitHeading class="h-xl" lines={['Every feature,', 'with its status.']} />
+      </div>
       <h2 class="visually-hidden">Feature list by phase</h2>
-      <FeatureGrid headingLevel="h3" />
+      <FeatureGrid headingLevel="h3" filter />
       <p class="muted small">Looking for timing? The <a class="link" href="/roadmap/">roadmap</a> shows the release milestones.</p>
     </div>
   </section>

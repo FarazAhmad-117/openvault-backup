@@ -119,9 +119,30 @@ final class TarWriter {
 		$prefix = rtrim( substr( $block, 345, 155 ), "\0" );
 		return array(
 			'name' => '' === $prefix ? $name : $prefix . '/' . $name,
-			'size' => (int) octdec( trim( substr( $block, 124, 12 ), "\0 " ) ),
+			'size' => self::parse_size_field( substr( $block, 124, 12 ) ),
 			'type' => substr( $block, 156, 1 ),
 		);
+	}
+
+	/**
+	 * Read the 12 byte size field: octal text, or (GNU tar, sizes of 8 GiB and more) a big-endian number after a 0x80 marker byte.
+	 *
+	 * @param string $field Field.
+	 * @return int Size, never negative (a value that does not fit in an int becomes PHP_INT_MAX).
+	 */
+	private static function parse_size_field( $field ) {
+		if ( '' !== $field && 0 !== ( ord( $field[0] ) & 0x80 ) ) {
+			$value = ord( $field[0] ) & 0x7f;
+			for ( $i = 1, $n = strlen( $field ); $i < $n; $i++ ) {
+				if ( $value > ( PHP_INT_MAX >> 8 ) ) {
+					return PHP_INT_MAX;
+				}
+				$value = ( $value << 8 ) | ord( $field[ $i ] );
+			}
+			return $value;
+		}
+		$digits = trim( $field, "\0 " );
+		return 1 === preg_match( '/^[0-7]+\z/', $digits ) ? (int) octdec( $digits ) : 0;
 	}
 
 	/**

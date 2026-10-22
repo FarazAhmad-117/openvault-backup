@@ -1,0 +1,15 @@
+---
+// Honest top bar for the home page. It scrolls away; the header stays sticky.
+import { PLUGIN_VERSION } from '../config/site';
+---
+
+<aside class="announce" aria-label="Release status">
+  <p><span class="tag mono">v{PLUGIN_VERSION} pre-alpha</span> <span>is out: backups to your server and S3-compatible storage, and restore with undo. Schedules are coming.</span> <a class="u-draw" href="/changelog/">What is in it</a></p>
+</aside>
+
+<style>
+  .announce { position: relative; z-index: 205; background: var(--surface); border-bottom: 1px solid var(--line-strong); }
+  .announce p { max-width: none; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.25rem 0.75rem; padding: 0.55rem var(--gutter); font-size: 0.8125rem; line-height: 1.4; color: var(--text); text-align: center; }
+  .tag { color: var(--accent-ink); background: var(--accent); border-radius: 999px; padding: 0.1rem 0.6rem; font-size: 0.6875rem; letter-spacing: 0.08em; }
+  .announce a { color: var(--accent); }
+</style>

@@ -33,6 +33,7 @@ class Installer {
 	public static function migrations() {
 		return array(
 			'1' => 'migrate_1',
+			'2' => 'migrate_2',
 		);
 	}
 
@@ -42,7 +43,7 @@ class Installer {
 	 * @return string[]
 	 */
 	public static function table_names() {
-		return array( 'backups', 'backup_files', 'destinations', 'schedules', 'logs' );
+		return array( 'backups', 'backup_files', 'destinations', 'schedules', 'logs', 'restores' );
 	}
 
 	/**
@@ -198,5 +199,41 @@ class Installer {
 		foreach ( $tables as $sql ) {
 			dbDelta( $sql );
 		}
+	}
+
+	/**
+	 * Schema v2: restore jobs (Milestone 5). A restore replaces the database, and every plugin table survives a database import, so the
+	 * job record lives in its own table instead of in the options table.
+	 *
+	 * @return void
+	 */
+	private static function migrate_2() {
+		global $wpdb;
+
+		require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+
+		$p       = $wpdb->prefix . 'ovb_';
+		$charset = $wpdb->get_charset_collate();
+
+		dbDelta(
+			"CREATE TABLE {$p}restores (
+				id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+				backup_id bigint(20) unsigned NOT NULL,
+				mode varchar(10) NOT NULL DEFAULT 'full',
+				status varchar(20) NOT NULL DEFAULT 'queued',
+				step varchar(20) NOT NULL DEFAULT 'preflight',
+				state longtext,
+				snapshot_backup_id bigint(20) unsigned DEFAULT NULL,
+				error text,
+				started_at datetime DEFAULT NULL,
+				finished_at datetime DEFAULT NULL,
+				created_at datetime NOT NULL,
+				updated_at datetime NOT NULL,
+				created_by bigint(20) unsigned NOT NULL DEFAULT 0,
+				PRIMARY KEY  (id),
+				KEY backup_id (backup_id),
+				KEY status (status)
+			) $charset;"
+		);
 	}
 }

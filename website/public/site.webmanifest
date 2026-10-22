@@ -1,0 +1,13 @@
+{
+  "name": "OpenVault Backup",
+  "short_name": "OpenVault",
+  "description": "Free, open-source WordPress backups to your own cloud.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#07080a",
+  "theme_color": "#07080a",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

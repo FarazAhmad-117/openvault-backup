@@ -2,8 +2,8 @@
 /**
  * Plugin Name:       OpenVault Backup
  * Plugin URI:        https://github.com/FarazAhmad-117/openvault-backup
- * Description:       Free, open-source backups to your own S3-compatible or local storage (Google Drive planned). No relay servers, no paid tiers. Pre-alpha: no restore yet.
- * Version:           0.2.0
+ * Description:       Free, open-source backups to your own S3-compatible or local storage, with restore from your backup history and undo. No relay servers, no paid tiers. Pre-alpha: try it on a copy of your site first.
+ * Version:           0.3.0
  * Requires at least: 6.5
  * Requires PHP:      7.4
  * Author:            OpenVault contributors
@@ -19,8 +19,8 @@
 
 defined( 'ABSPATH' ) || exit;
 
-define( 'OVB_VERSION', '0.2.0' );
-define( 'OVB_DB_VERSION', '1' );
+define( 'OVB_VERSION', '0.3.0' );
+define( 'OVB_DB_VERSION', '2' );
 define( 'OVB_FILE', __FILE__ );
 define( 'OVB_PATH', plugin_dir_path( __FILE__ ) );
 define( 'OVB_URL', plugin_dir_url( __FILE__ ) );

@@ -1,13 +1,13 @@
 <?php
 /**
- * Per-backup mutex.
+ * Mutex of one job: a backup (key = backup id) or the restore jobs (key "restore").
  *
  * Phase: MVP
  *
  * Purpose: Make sure two PHP processes never run the same backup job at once.
  *
  * Design:
- *  - The lock is the row "ovb_lock_<backup id>" with the value "<unix time>:<owner token>".
+ *  - The lock is the row "ovb_lock_<backup id>" (or "ovb_lock_restore", the global lock of restore jobs) with the value "<unix time>:<owner token>".
  *  - Acquiring is an atomic INSERT (unique option_name), so exactly one caller wins.
  *  - A lock older than the TTL is stale (its owner died, e.g. PHP timeout). Takeover deletes the stale value
  *    with a conditional DELETE (only succeeds while the row still holds that exact value) and then inserts
@@ -31,11 +31,11 @@ final class JobLock {
 	const OPTION_PREFIX = 'ovb_lock_';
 
 	/**
-	 * Backup id.
+	 * Lock key: a backup id (int) or a short lowercase name such as "restore" (the global restore lock).
 	 *
-	 * @var int
+	 * @var int|string
 	 */
-	private $backup_id;
+	private $key;
 
 	/**
 	 * Storage.
@@ -68,25 +68,43 @@ final class JobLock {
 	/**
 	 * Constructor.
 	 *
-	 * @param int            $backup_id Backup id.
-	 * @param LockStore|null $store     Storage (defaults to the options table).
-	 * @param callable|null  $now       Returns unix time. Defaults to time().
+	 * @param int|string     $key   Backup id, or a lowercase name ("restore" locks restore jobs, option ovb_lock_restore).
+	 * @param LockStore|null $store Storage (defaults to the options table).
+	 * @param callable|null  $now   Returns unix time. Defaults to time().
+	 * @throws \InvalidArgumentException For a name that is not lowercase letters, digits and underscores.
 	 */
-	public function __construct( int $backup_id, ?LockStore $store = null, ?callable $now = null ) {
-		$this->backup_id = $backup_id;
-		$this->store     = null === $store ? new OptionsLockStore() : $store;
-		$this->now       = $now;
-		$this->token     = bin2hex( random_bytes( 8 ) );
+	public function __construct( $key, ?LockStore $store = null, ?callable $now = null ) {
+		$this->key   = self::normalise_key( $key );
+		$this->store = null === $store ? new OptionsLockStore() : $store;
+		$this->now   = $now;
+		$this->token = bin2hex( random_bytes( 8 ) );
 	}
 
 	/**
-	 * Option name of a backup's lock.
+	 * Option name of a lock.
 	 *
-	 * @param int $backup_id Backup id.
+	 * @param int|string $key Backup id or lock name.
 	 * @return string
 	 */
-	public static function option_name( $backup_id ) {
-		return self::OPTION_PREFIX . (int) $backup_id;
+	public static function option_name( $key ) {
+		return self::OPTION_PREFIX . self::normalise_key( $key );
+	}
+
+	/**
+	 * A backup id as an int, or a valid lock name.
+	 *
+	 * @param mixed $key Key.
+	 * @return int|string
+	 * @throws \InvalidArgumentException For an invalid name.
+	 */
+	private static function normalise_key( $key ) {
+		if ( is_string( $key ) && 1 === preg_match( '/^[a-z][a-z0-9_]{0,31}\z/', $key ) ) {
+			return $key;
+		}
+		if ( is_string( $key ) && ! ctype_digit( $key ) ) {
+			throw new \InvalidArgumentException( 'Invalid lock name.' );
+		}
+		return (int) $key;
 	}
 
 	/**
@@ -128,7 +146,7 @@ final class JobLock {
 	 * @return bool True when this instance now holds the lock.
 	 */
 	public function acquire( $ttl ) {
-		$name  = self::option_name( $this->backup_id );
+		$name  = self::option_name( $this->key );
 		$value = $this->make_value();
 
 		if ( $this->store->insert( $name, $value ) ) {
@@ -162,7 +180,7 @@ final class JobLock {
 		if ( '' === $this->held ) {
 			return false;
 		}
-		$name = self::option_name( $this->backup_id );
+		$name = self::option_name( $this->key );
 		$new  = $this->make_value();
 		if ( $new === $this->held ) {
 			// Same second: an UPDATE would change nothing (MySQL reports 0 rows), so just verify ownership.
@@ -189,7 +207,7 @@ final class JobLock {
 		if ( '' === $this->held ) {
 			return false;
 		}
-		$released   = $this->store->delete_if( self::option_name( $this->backup_id ), $this->held );
+		$released   = $this->store->delete_if( self::option_name( $this->key ), $this->held );
 		$this->held = '';
 		return $released;
 	}
@@ -210,7 +228,7 @@ final class JobLock {
 	 * @return bool
 	 */
 	public function is_locked( $ttl ) {
-		$existing = $this->store->read( self::option_name( $this->backup_id ) );
+		$existing = $this->store->read( self::option_name( $this->key ) );
 		return null !== $existing && ! self::is_stale( $existing, $this->time(), (int) $ttl );
 	}
 

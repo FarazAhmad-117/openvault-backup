@@ -56,6 +56,7 @@ for (const vp of viewports) {
   await page.setViewport(vp);
   for (const r of routes) {
     await page.goto(base + r, { waitUntil: 'networkidle0' });
+    await new Promise((r) => setTimeout(r, 2200)); // let the load-in fades finish: axe would otherwise measure contrast mid-animation
     await page.evaluate(axeSource);
     const res = await page.evaluate((tags) => axe.run(document, { runOnly: { type: 'tag', values: tags } }), TAGS);
     for (const v of res.violations) {

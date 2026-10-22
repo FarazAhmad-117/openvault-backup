@@ -11,7 +11,7 @@ class ExclusionRulesTest extends TestCase {
 
 	public function test_plugin_tables_are_always_excluded() {
 		$rules = new ExclusionRules( 'wp_' );
-		foreach ( array( 'wp_ovb_backups', 'wp_ovb_backup_files', 'wp_ovb_destinations', 'wp_ovb_schedules', 'wp_ovb_logs', 'wp_ovb_future_table' ) as $table ) {
+		foreach ( array( 'wp_ovb_backups', 'wp_ovb_backup_files', 'wp_ovb_destinations', 'wp_ovb_schedules', 'wp_ovb_logs', 'wp_ovb_restores', 'wp_ovb_future_table' ) as $table ) {
 			$this->assertTrue( $rules->is_excluded_table( $table ), $table );
 		}
 		foreach ( array( 'wp_posts', 'wp_options', 'wp_ovbtest_x', 'wp_ovbx', 'wp_2_ovb_logs', 'other_ovb_logs', 'wp_my_ovb_table' ) as $table ) {

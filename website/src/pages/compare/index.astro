@@ -2,6 +2,7 @@
 import Base from '../../layouts/Base.astro';
 import PageHead from '../../components/PageHead.astro';
 import StatusBadge from '../../components/StatusBadge.astro';
+import VaultDoor from '../../components/art/VaultDoor.astro';
 import { repoUrl, siteUrl } from '../../config/site';
 import { statusOf } from '../../lib/registry';
 import { faqPage, breadcrumbs } from '../../lib/jsonld';
@@ -13,7 +14,7 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'Compare', path: '/compare/'
 const faqs = [
   {
     q: 'Is OpenVault ready to replace my current backup plugin?',
-    a: 'No. OpenVault Backup is pre-alpha. It can back up the database and files to your server and to S3-compatible storage or a folder, but it cannot restore them, run schedules, delete old backups or use Google Drive yet. Keep your current backup solution running, and do not delete existing backups because of anything on this site.',
+    a: 'No. OpenVault Backup is pre-alpha. It can back up the database and files to your server and to S3-compatible storage or a folder, and restore a backup of this site from your history, but it cannot run schedules, delete old backups, move a site to another domain or use Google Drive yet. Keep your current backup solution running, and do not delete existing backups because of anything on this site.',
   },
   {
     q: 'What should I check when choosing a WordPress backup plugin?',
@@ -30,27 +31,28 @@ const designs: [string, string, readonly (readonly [string, string])[]][] = [
   ['Your own credentials', 'You connect your own S3 keys today, and your own Google OAuth app once Drive is built; there is no relay server.', [['Google Drive', 'destination-gdrive'], ['S3-compatible', 'destination-s3']]],
   ['Resumable chunked jobs', 'Long tasks run in small batches built for roughly 30 second limits.', [['One-click backups', 'backup-manual']]],
   ['Rediscoverable backups', 'A manifest.json beside every backup lets a fresh install find it again.', [['Remote re-indexing', 'restore-upload']]],
-  ['Safety snapshot before restore', 'A restore first snapshots the current site, so it can be undone.', [['Restore from history', 'restore-in-place']]],
+  ['Safety snapshot before restore', 'A restore first takes a safety snapshot of the database, and keeps a journal of overwritten files, so it can be undone. Pre-alpha.', [['Restore from history', 'restore-in-place']]],
 ];
 ---
 
 <Base title="Free WordPress backup plugin: how OpenVault compares" description={description} path="/compare/" jsonLd={[faqPage(faqs), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Compare" path="/compare/" title="Free WordPress backup plugin: how OpenVault compares">
     <p>OpenVault Backup is being built as a free, open-source backup plugin. These pages put its design next to what other plugins say about themselves.</p>
-    <p class="status-line"><StatusBadge status={statusOf('backup-manual')} /> <span class="small">Pre-alpha: backups to your server, S3-compatible storage and a folder work; restore, schedules and Google Drive do not yet. Everything below about OpenVault is a design unless its badge says Available.</span></p>
+    <p class="status-line"><StatusBadge status={statusOf('backup-manual')} /> <span class="small">Pre-alpha: backups to your server, S3-compatible storage and a folder, and restore from history, work; schedules and Google Drive do not yet. Everything below about OpenVault is a design unless its badge says Available.</span></p>
+    <div slot="visual" aria-hidden="true"><VaultDoor /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <div class="warn-box" role="note">
+      <div class="warn-box" role="note" data-reveal>
         <h2>Not a replacement yet</h2>
         <p>If you need working backups today, use a released plugin and keep your current backups. The comparisons are for people deciding what to follow, not what to rely on.</p>
       </div>
 
-      <h2 class="sec-title">What OpenVault is designed to be</h2>
-      <ul role="list" class="ledger">
+      <div class="stack"><p class="eyebrow" data-reveal>The design</p><h2 class="sec-title" data-reveal>What OpenVault is designed to be</h2></div>
+      <ul role="list" class="ledger" data-reveal="stagger">
         {designs.map(([title, text, badges]) => (
-          <li class="row">
+          <li class="row card">
             <h3>{title}</h3>
             <p class="muted">{text}</p>
             <ul role="list" class="tags">
@@ -66,10 +68,10 @@ const designs: [string, string, readonly (readonly [string, string])[]][] = [
 
   <section class="section section--surface">
     <div class="container stack-lg">
-      <h2 class="sec-title">Side-by-side pages</h2>
-      <ul role="list" class="grid grid--3">
+      <h2 class="sec-title" data-reveal>Side-by-side pages</h2>
+      <ul role="list" class="grid grid--3" data-reveal="stagger">
         {competitors.map((c) => (
-          <li class="panel stack">
+          <li class="card">
             <h3><a href={`/compare/${c.slug}/`}>OpenVault vs {c.name}</a></h3>
             <p class="muted">{c.summary}</p>
             <a class="link" href={`/compare/${c.slug}/`}>Read the comparison</a>
@@ -82,7 +84,7 @@ const designs: [string, string, readonly (readonly [string, string])[]][] = [
   <section class="section">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">Sources and corrections</h2>
+        <h2 class="sec-title" data-reveal>Sources and corrections</h2>
       </div>
       <div class="stack">
         <p class="muted">Information checked on {CHECKED_ON}; sources linked; plans change, please verify. Spotted a mistake? <a class="link" href={`${repoUrl()}/issues`} rel="noopener">Open an issue</a>.</p>
@@ -93,7 +95,7 @@ const designs: [string, string, readonly (readonly [string, string])[]][] = [
 
   <section class="section section--surface">
     <div class="container two">
-      <div class="stack"><h2 class="sec-title">Questions</h2></div>
+      <div class="stack"><h2 class="sec-title" data-reveal>Questions</h2></div>
       <div class="stack-lg">
         {faqs.map((f) => (
           <div class="qa">
@@ -101,27 +103,27 @@ const designs: [string, string, readonly (readonly [string, string])[]][] = [
             <p class="muted">{f.a}</p>
           </div>
         ))}
-        <p class="muted">See how planned restores work on the <a class="link" href="/restore-and-migrate/">restore and migrate page</a>.</p>
+        <p class="muted">See how restore works, and what it cannot do yet, on the <a class="link" href="/restore-and-migrate/">restore and migrate page</a>.</p>
       </div>
     </div>
   </section>
 </Base>
 
 <style>
-  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
-  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
-  .row { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
-  .row h3 { font-size: var(--step-1); }
+  .ledger { padding: 0; }
+  .ledger { display: grid; gap: var(--space-4); }
+  .row { display: grid; gap: var(--space-3) var(--space-6); min-width: 0; }
+  .row h3 { font-size: var(--step-2); line-height: 1.1; }
   .tags { padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
   .tags li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
   .rule-tag { display: inline-flex; padding: 0.2em 0.75em; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: var(--step--1); font-weight: 600; color: var(--muted); }
   .panel { list-style: none; }
-  .panel h3 { font-size: var(--step-2); }
-  .panel h3 a { text-decoration: none; }
-  .panel h3 a:hover { text-decoration: underline; }
+  .card h3 { font-size: var(--step-2); line-height: 1.1; }
+  .card h3 a { text-decoration: none; }
+  .card h3 a:hover { text-decoration: underline; }
   .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
   .qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
-  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
+  
   @media (min-width: 60rem) {
     .row { grid-template-columns: 15rem minmax(0, 1fr) 16rem; align-items: start; }
     .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }

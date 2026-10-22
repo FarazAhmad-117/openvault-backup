@@ -7,11 +7,20 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import satori from 'satori';
 import { Resvg } from '@resvg/resvg-js';
+import sharp from 'sharp';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const dist = join(root, 'dist');
 const font = readFileSync(join(root, 'node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-normal.woff'));
 const fontItalic = readFileSync(join(root, 'node_modules/@fontsource/instrument-serif/files/instrument-serif-latin-400-italic.woff'));
+
+// A real product screenshot (the plugin admin, v0.3.0 demo site) on the right of every card: 560 px wide, rounded, hairline border.
+const shotW = 560;
+const shotBuf = await sharp(join(root, 'src/assets/product/screen-done.png')).resize({ width: shotW }).toBuffer();
+const shotH = (await sharp(shotBuf).metadata()).height;
+const round = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${shotW}" height="${shotH}"><rect width="${shotW}" height="${shotH}" rx="14"/></svg>`);
+const shot = await sharp(shotBuf).composite([{ input: round, blend: 'dest-in' }]).png().toBuffer();
+const frame = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${shotW + 4}" height="${shotH + 4}"><rect x="1" y="1" width="${shotW + 2}" height="${shotH + 2}" rx="15" fill="none" stroke="#e0a458" stroke-width="2"/></svg>`);
 
 const walk = (d) => readdirSync(d).flatMap((n) => {
   const p = join(d, n);
@@ -26,7 +35,7 @@ const meta = (html, prop) => {
 const h = (type, style, children) => ({ type, props: { style, children } });
 
 function card(title) {
-  const size = title.length > 60 ? 64 : title.length > 36 ? 80 : 96;
+  const size = title.length > 60 ? 44 : title.length > 36 ? 54 : 68;
   return h('div', { width: 1056, height: 478, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: 72, background: '#07080a', color: '#e8e6e1', fontFamily: 'Instrument Serif', borderTop: '8px solid #e0a458', boxSizing: 'content-box' }, [
     h('div', { display: 'flex', alignItems: 'center', justifyContent: 'space-between' }, [
       h('div', { display: 'flex', alignItems: 'center', gap: 16, fontSize: 40, color: '#e0a458' }, [
@@ -35,8 +44,8 @@ function card(title) {
       ]),
       h('div', { display: 'flex', fontSize: 28, color: '#e0a458', border: '2px solid #e0a458', borderRadius: 999, padding: '6px 22px' }, 'Pre-alpha'),
     ]),
-    h('div', { display: 'flex', fontSize: size, lineHeight: 1.05, letterSpacing: -1, maxWidth: 1000 }, title),
-    h('div', { display: 'flex', fontSize: 32, color: '#9a9ca3', fontStyle: 'italic' }, 'Free, open-source WordPress backups to your own cloud.'),
+    h('div', { display: 'flex', fontSize: size, lineHeight: 1.05, letterSpacing: -1, maxWidth: 560 }, title),
+    h('div', { display: 'flex', fontSize: 26, maxWidth: 470, color: '#9a9ca3', fontStyle: 'italic' }, 'Free, open-source WordPress backups to your own cloud.'),
   ]);
 }
 
@@ -57,7 +66,8 @@ for (const file of walk(dist)) {
       { name: 'Instrument Serif', data: fontItalic, weight: 400, style: 'italic' },
     ],
   });
-  const png = new Resvg(svg, { fitTo: { mode: 'width', value: 1200 } }).render().asPng();
+  const base = new Resvg(svg, { fitTo: { mode: 'width', value: 1200 } }).render().asPng();
+  const png = await sharp(base).composite([{ input: shot, left: 604, top: 236 }, { input: frame, left: 602, top: 234 }]).png({ palette: true, colours: 96, effort: 10 }).toBuffer();
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, png);
   done.set(out, png.length);

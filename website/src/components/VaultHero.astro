@@ -1,7 +1,6 @@
 ---
-// Decorative vault door. Static by default; the dial, handle and locking bolts
-// are driven by page scroll only where CSS scroll-driven animations exist and
-// the visitor has not asked for reduced motion. No JavaScript.
+// Decorative vault door. Static (closed) by default. Inside a [data-scrub] track the dial, handle, bolts and the
+// swing-away are driven by the --p custom property (see the style block); nothing moves without JS or with reduced motion.
 const C = 200;
 const polar = (r: number, deg: number) => {
   const a = ((deg - 90) * Math.PI) / 180;
@@ -59,7 +58,7 @@ const spokes = [0, 120, 240];
 </div>
 
 <style>
-  .vault { width: 100%; max-width: 30rem; aspect-ratio: 1 / 1; margin-inline: auto; }
+  .vault { width: 100%; aspect-ratio: 1 / 1; margin-inline: auto; }
   svg { width: 100%; height: 100%; overflow: visible; }
   .frame { fill: var(--surface); stroke: var(--line-strong); stroke-width: 1.5; }
   .frame-inner { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
@@ -80,24 +79,18 @@ const spokes = [0, 120, 240];
 
   .dial, .handle { transform-box: view-box; transform-origin: 50% 50%; }
 
-  @keyframes dial-turn { to { transform: rotate(210deg); } }
-  @keyframes handle-turn { to { transform: rotate(-120deg); } }
-  @keyframes bolt-retract { to { transform: translateY(40px); } }
-  @keyframes glow-up { to { opacity: 1; } }
-
-  @supports (animation-timeline: scroll()) {
-    @media (prefers-reduced-motion: no-preference) {
-      .dial, .handle, .bolt, .glow {
-        animation-timing-function: linear;
-        animation-fill-mode: both;
-        animation-duration: 1ms; /* required by some engines; the timeline drives progress */
-        animation-timeline: scroll(root);
-        animation-range: 0 90vh;
-      }
-      .dial { animation-name: dial-turn; }
-      .handle { animation-name: handle-turn; animation-range: 20vh 90vh; }
-      .bolt { animation-name: bolt-retract; animation-range: 35vh 90vh; }
-      .glow { animation-name: glow-up; animation-range: 40vh 90vh; }
-    }
+  /* Scroll-driven by --p (0..1, set on the pinned hero track by src/motion/scrub.ts; stays 0 without JS or with reduced motion).
+     Stage a: dial turns (0-0.5). Stage b: handle turns and bolts retract (0.3-0.55). Stage c: the door swings away (0.55-0.95). */
+  .vault {
+    --a: clamp(0, calc(var(--p, 0) / 0.5), 1);
+    --b: clamp(0, calc((var(--p, 0) - 0.3) / 0.25), 1);
+    --c: clamp(0, calc((var(--p, 0) - 0.55) / 0.4), 1);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .vault { transform: scale(calc(1 + var(--c) * 2.4)); opacity: calc(1 - var(--c) * 1.25); will-change: transform, opacity; }
+    .dial { transform: rotate(calc(var(--a) * 360deg)); }
+    .handle { transform: rotate(calc(var(--b) * -120deg)); }
+    .bolt { transform: translateY(calc(var(--b) * 40px)); }
+    .glow { opacity: calc(0.35 + var(--b) * 0.65); }
   }
 </style>

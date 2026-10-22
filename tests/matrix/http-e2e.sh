@@ -597,3 +597,36 @@ for fmt in zip tar.gz; do
 		break
 	fi
 done
+
+# Maintenance mode of a database restore over REAL HTTP: the flag file is written the way the restore does it.
+e_maintenance() {
+	local tag="[maintenance]" hdr=/tmp/ovb-mm-hdr
+	e_php '( new OpenVault\Backup\Restore\MaintenanceMode() )->enable( 99 );'
+	code=$(curl -s -D "$hdr" -o /tmp/ovb-mm-body -w "%{http_code}" "$URL/")
+	e_check "$tag the front page answers 503 while the flag is on" "$([ "$code" = 503 ] && echo 1 || echo 0)" "$code"
+	e_check "$tag with Retry-After: 120 and a branded page" "$(grep -qi '^retry-after: 120' "$hdr" && grep -q 'OpenVault Backup' /tmp/ovb-mm-body && echo 1 || echo 0)"
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/?p=1&x=/wp-json/ovb/v1/")
+	e_check "$tag a path in a query value does not open the site" "$([ "$code" = 503 ] && echo 1 || echo 0)" "$code"
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/index.php?rest_route=/wp/v2/posts")
+	e_check "$tag other REST routes are blocked" "$([ "$code" = 503 ] && echo 1 || echo 0)" "$code"
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/index.php?rest_route=/ovb/v1/backups")
+	e_check "$tag the plugin REST namespace still answers (401 without a login, not 503)" "$([ "$code" = 401 ] && echo 1 || echo 0)" "$code"
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/wp-login.php")
+	e_check "$tag the login page still works" "$([ "$code" = 200 ] && echo 1 || echo 0)" "$code"
+	code=$(curl -s -o /dev/null -w '%{http_code}' -b "$JAR" "$URL/wp-admin/admin.php?page=openvault-system")
+	e_check "$tag an administrator still reaches the admin area" "$([ "$code" = 200 ] && echo 1 || echo 0)" "$code"
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/wp-admin/admin-ajax.php?action=nopriv_other")
+	e_check "$tag other ajax actions of anonymous visitors are blocked" "$([ "$code" = 503 ] && echo 1 || echo 0)" "$code"
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/wp-cron.php?doing_wp_cron")
+	e_check "$tag wp-cron.php runs (only the queue runner event)" "$([ "$code" = 200 ] && echo 1 || echo 0)" "$code"
+	e_php '( new OpenVault\Backup\Restore\MaintenanceMode() )->disable();'
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/")
+	e_check "$tag the front page is back after the flag is removed" "$([ "$code" = 200 ] && echo 1 || echo 0)" "$code"
+	e_php '$p = OpenVault\Backup\Restore\MaintenanceMode::flag_path(); file_put_contents( $p, json_encode( array( "restore_id" => 99, "started" => time() - 4000, "expires" => time() - 2000 ) ) );'
+	code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/")
+	e_check "$tag an expired flag fails open" "$([ "$code" = 200 ] && echo 1 || echo 0)" "$code"
+	e_php '( new OpenVault\Backup\Restore\MaintenanceMode() )->disable();'
+	rm -f "$hdr" /tmp/ovb-mm-body
+}
+step "Maintenance mode over HTTP"
+e_maintenance

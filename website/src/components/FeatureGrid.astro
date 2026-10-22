@@ -1,14 +1,24 @@
 ---
 import StatusBadge from './StatusBadge.astro';
 import { features, type Feature } from '../data/features';
+import { countByStatus, label, type Status } from '../lib/status';
 
 interface Props {
   phase?: Feature['phase'];
   limit?: number;
   /** Heading level used for each phase group; pick one level below the section heading. */
   headingLevel?: 'h3' | 'h4';
+  /** Show big status counters that double as a CSS-only filter (radio inputs + :has(), see pages.css). */
+  filter?: boolean;
 }
-const { phase, limit, headingLevel = 'h3' } = Astro.props;
+const { phase, limit, headingLevel = 'h3', filter = false } = Astro.props;
+const counts = countByStatus(features);
+const chips: { id: 'all' | Status; text: string; n: number }[] = [
+  { id: 'all', text: 'All features', n: features.length },
+  { id: 'available', text: label('available'), n: counts.available },
+  { id: 'in-progress', text: label('in-progress'), n: counts['in-progress'] },
+  { id: 'planned', text: label('planned'), n: counts.planned },
+];
 
 const blurbs: Record<Feature['phase'], string> = {
   MVP: 'The first release',
@@ -24,16 +34,29 @@ const groups = order
 const Heading = headingLevel;
 ---
 
-<div class="ledger">
+<div class="ledger" data-filterable={filter ? '' : undefined}>
+  {filter && (
+    <div class="chips" role="radiogroup" aria-label="Filter the ledger by status" data-reveal="stagger">
+      {chips.map((c, i) => (
+        <>
+          <input class="visually-hidden" type="radio" name="status-filter" id={`st-${c.id}`} checked={i === 0} />
+          <label class={`chip chip--${c.id}`} for={`st-${c.id}`} data-spot>
+            <span class="numeral cn" data-count>{c.n}</span>
+            <span class="mono">{c.text}</span>
+          </label>
+        </>
+      ))}
+    </div>
+  )}
   {groups.map((g) => (
-    <section class={`group group--${g.phase.replace(/\s+/g, '').toLowerCase()}`}>
-      <header class="gh">
+    <section data-phase={g.phase} class={`group group--${g.phase.replace(/\s+/g, '').toLowerCase()}`}>
+      <header class="gh" data-reveal>
         <Heading class="phase">{g.phase}</Heading>
         <p class="blurb muted small">{blurbs[g.phase]}</p>
       </header>
-      <ul role="list" class="rows">
+      <ul role="list" class="rows" data-reveal="stagger">
         {g.items.map((f) => (
-          <li class="row">
+          <li class="row" data-spot data-status={f.status}>
             <div class="txt">
               <p class="title">{f.title}</p>
               <p class="sum muted">{f.summary}</p>
@@ -48,6 +71,17 @@ const Heading = headingLevel;
 
 <style>
   .ledger { display: grid; gap: var(--space-8); }
+  .chips { min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; border-top: 1px solid var(--line-strong); }
+  .chip { display: grid; gap: var(--space-2); padding: var(--space-5) var(--space-4) var(--space-5) 0; border-bottom: 1px solid var(--line); cursor: pointer; transition: color 0.3s; color: var(--muted); }
+  .chip + input + .chip, .chip { border-left: 0; }
+  .cn { font-size: clamp(3.5rem, 1.5rem + 7vw, 8rem); color: inherit; }
+  .chip .mono { color: inherit; }
+  input:checked + .chip { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+  input:checked + .chip .cn { color: var(--accent); }
+  input:focus-visible + .chip { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .chip:hover { color: var(--text); }
+  @media (min-width: 48rem) { .chips { grid-template-columns: repeat(4, minmax(0, 1fr)); } .chip { padding-left: var(--space-5); border-left: 1px solid var(--line); } .chip:first-of-type { border-left: 0; padding-left: 0; } }
+  @supports not selector(:has(*)) { .chips { display: none; } }
   .group { display: grid; gap: var(--space-4) var(--space-7); border-top: 1px solid var(--line-strong); padding-top: var(--space-5); }
   .group--mvp { border-top-color: var(--accent); }
   .phase { font-size: var(--step-3); line-height: 1; }

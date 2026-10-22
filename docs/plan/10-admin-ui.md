@@ -25,8 +25,11 @@ Dashboard · Backup Now · Schedules · Backups (History) · Restore · Destinat
 | GET | /backups/{id}/progress | Poll progress |
 | POST | /backups/{id}/cancel | Cancel |
 | DELETE | /backups/{id} | Delete (choose destinations) |
-| POST | /backups/{id}/restore | Start restore |
-| GET | /restores/{id}/progress | Poll restore |
+| POST | /restores/preview | What a restore would do (step 5d, read only) |
+| POST, GET | /restores | Start a restore (typed RESTORE), list (5d) |
+| GET | /restores/{id} | Poll a restore (status, progress, result, undo info; browser kick) |
+| POST | /restores/{id}/confirm, /cancel, /undo, /undo/dismiss | Apply (typed RESTORE), cancel, undo (typed RESTORE), delete the undo data (5d) |
+| GET | /restores/{id}/status?t= | Token status for a logged-out browser (5d, see 09-security.md) |
 | GET, POST | /destinations | List, create (built in step 4c) |
 | POST, DELETE | /destinations/{id} | Update (label, settings, replace keys), remove (4c) |
 | POST | /destinations/{id}/test | Test connection |
@@ -80,3 +83,14 @@ Native WordPress styles, accessible, translatable (text domain `openvault-backup
 **Secrets in the UI**: the secret key input is a password field (`autocomplete="off"`), never pre-filled, never rendered as a `value`. Editing shows "Access key and secret key are saved. Leave the fields empty to keep them." with a "Replace the keys" button. Nothing about the keys is placed in an HTML attribute, a notice or a response.
 
 **Back up now picker**: a "Where to send it" fieldset lists the configured destinations as checkboxes (name, provider, status as text). New and connected destinations can be selected; error (last test failed) and needs_reconnect ones are disabled with the reason and the page links to Destinations. It says "A copy always stays in the local backup folder on this server" and, with no destination, hints at the Destinations page. The script sends the checked ids as `destinations` and, when the backup ends, lists each destination with its result as text in the summary ("Where it was sent"). History shows destination labels (a removed destination falls back to "Destination N").
+
+## Implemented in Milestone 5 step 5d (Restore page, restore REST, History action, banner)
+- **Restore page** (`Admin\Pages\RestorePage`, `assets/admin/js/restore.js`, loaded only on this screen; classic PHP plus a small ES5 script; a `noscript` notice says JavaScript is required). Tab "From history" only; a note says that restoring an uploaded archive or a server folder is planned (no placeholder links).
+  1. **Choose**: restorable backups (complete or partial, not encrypted) newest first with date in the site time zone and age, trigger label (including "Safety snapshot before restore"), size, contents, and the copies (this server and destination labels); a backup whose only copy needs a reconnect is disabled with the reason; the modes `Database only`, `Files only`, `Whole site (database and files)` are enabled only when the backup can satisfy them; multisite and encrypted backups say they are not supported yet. `?backup=<id>` (History's Restore action) pre-selects a backup.
+  2. **Preview** ("What will happen", `POST /restores/preview`): counts and sizes, source, disk need against free space, the protected paths in plain language, warnings, the site-address acknowledgement and the "keep this site's current URLs" safety valve (explained as not a migration), the optional "also restore server config files" with the lock-out risk, the danger panel and the typed word RESTORE.
+  3. **Progress** (`POST /restores`, then polling `GET /restores/{id}`): progress bar (`<progress>`), step label, elapsed time; at `verified` the final "Ready to apply" summary with a second typed RESTORE and "Apply restore now" (`/confirm`); Cancel where allowed, otherwise the refusal text; "Maintenance mode is on" while applying; the logout handling and the status token channel (see 08-restore.md).
+  4. **Result**: counts from the job result, skipped files by reason in plain words, duration, kept URLs, a link to History for the safety snapshot; on failure the scrubbed error and what to do; the **Undo** section (typed RESTORE, the warning that undoing the database removes everything written since, progress and result of the undo job with the same polling) and "Dismiss undo data" (frees disk space, Undo is no longer possible).
+  - `?restore=<id>` opens that job; without it a queued, running or parked job is shown; otherwise the chooser with a "Recent restores" list below. Focus moves to the heading of each step, status changes go to an `aria-live` region, everything is keyboard operable and works at 390 px.
+- **History**: a "Restore" row action (link to `admin.php?page=openvault-restore&backup=<id>`) for restorable backups.
+- **Banner** on every plugin page except the Restore page: "A restore is in progress" (or "applying changes and the site is in maintenance mode") with a link to the status, while a restore is queued, running, parked or the maintenance flag is on (`Admin\RestoreChoices::banner()`).
+- **REST**: see the table in docs/plan/08-restore.md ("Implemented in Milestone 5 step 5d"). `GET /restores/{id}/progress` and `POST /backups/{id}/restore` of the table above are replaced by `GET /restores/{id}` and `POST /restores`.

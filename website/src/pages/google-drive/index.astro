@@ -2,6 +2,8 @@
 import Base from '../../layouts/Base.astro';
 import PageHead from '../../components/PageHead.astro';
 import StatusBadge from '../../components/StatusBadge.astro';
+import Icon from '../../components/Icon.astro';
+import Drive from '../../components/art/Drive.astro';
 import { siteUrl } from '../../config/site';
 import { statusOf } from '../../lib/registry';
 import { faqsByTag } from '../../data/faq';
@@ -32,26 +34,30 @@ const steps = [
   <PageHead crumb="Google Drive" path="/google-drive/" title="Back up WordPress to Google Drive">
     <p>OpenVault Backup is being built to send backups to your own Google Drive, through a Google app that you create yourself.</p>
     <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: Google Drive does not work yet. This page describes the design.</span></p>
+    <div slot="visual" class="art--planned" aria-hidden="true"><Drive /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <div class="warn-box" role="note">
+      <div class="warn-box" role="note" data-reveal>
         <h2>Not working yet</h2>
         <p>The plugin cannot connect to Google Drive, back up or restore today. Do not rely on it, and do not delete any other backup because of it.</p>
       </div>
 
-      <h2 class="sec-title">How it is designed</h2>
-      <div class="grid grid--3">
-        <article class="panel stack">
+      <div class="stack"><p class="eyebrow" data-reveal>Planned design</p><h2 class="sec-title" data-reveal>How it is designed</h2></div>
+      <div class="grid grid--3" data-reveal="stagger">
+        <article class="card card--planned">
+          <span class="card-ico"><Icon name="key" size={22} /></span>
           <h3>Your own OAuth app</h3>
           <p class="muted">You create the Google app in your own Google Cloud project. Tokens and data only travel between your site and your Google account. There is no relay server and no shared app, so nobody else holds your credentials.</p>
         </article>
-        <article class="panel stack">
+        <article class="card card--planned">
+          <span class="card-ico"><Icon name="scan" size={22} /></span>
           <h3>drive.file scope only</h3>
           <p class="muted">The plugin asks for the narrowest Drive permission. With drive.file it can only touch files and folders it created itself. It is not meant to read the rest of your Drive.</p>
         </article>
-        <article class="panel stack">
+        <article class="card card--planned">
+          <span class="card-ico"><Icon name="clock" size={22} /></span>
           <h3>Publish the app, skip the 7-day trap</h3>
           <p class="muted">A Google OAuth app left in Testing status loses its refresh token after 7 days, so backups would silently stop. Setting the app to In production avoids this. The setup guide makes it an explicit step.</p>
         </article>
@@ -62,7 +68,7 @@ const steps = [
   <section class="section section--surface">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">What you will need</h2>
+        <h2 class="sec-title" data-reveal>What you will need</h2>
         <ul role="list" class="need">
           <li><strong>A Google account</strong><span class="muted">Free is fine. It owns the Drive that holds your backups and the Google Cloud project.</span></li>
           <li><strong>Ten short steps</strong><span class="muted">Most are one click or one paste in Google Cloud Console or in the plugin.</span></li>
@@ -70,10 +76,11 @@ const steps = [
         <p><a class="btn btn--secondary" href={setupHref}>Read the setup guide (outline)</a></p>
       </div>
       <div class="stack-lg">
-        <h2 class="sec-title">The ten steps at a glance</h2>
+        <p class="eyebrow" data-reveal>The flow</p>
+        <h2 class="sec-title" data-reveal>The ten steps at a glance</h2>
         <ol role="list" class="steps">
           {steps.map((s, i) => (
-            <li class="step">
+            <li class="step" data-reveal>
               <span class="step-n" aria-hidden="true">{i + 1}</span>
               <p class="muted">{s}</p>
             </li>
@@ -87,7 +94,7 @@ const steps = [
   <section class="section">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">Questions</h2>
+        <h2 class="sec-title" data-reveal>Questions</h2>
         <p class="muted">The short answers are on the <a class="link" href="/faq/">FAQ</a>.</p>
       </div>
       <div class="stack-lg">
@@ -97,25 +104,24 @@ const steps = [
             <p class="muted">{f.a}</p>
           </div>
         ))}
-        <p class="muted">Prefer not to use Google? <a class="link" href="/s3-r2/">S3-compatible storage and Cloudflare R2</a> are available now in pre-alpha 0.2.0.</p>
+        <p class="muted">Prefer not to use Google? <a class="link" href="/s3-r2/">S3-compatible storage and Cloudflare R2</a> are available now in pre-alpha 0.3.0.</p>
       </div>
     </div>
   </section>
 </Base>
 
 <style>
-  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
-  .panel h3 { font-size: var(--step-2); }
+  .card h3 { font-size: var(--step-2); line-height: 1.1; }
+  .card p { max-width: none; }
   .two { display: grid; gap: var(--space-8); }
   .need { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
   .need li { display: grid; gap: var(--space-1); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
-  .steps { padding: 0; display: grid; }
-  .step { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr); gap: var(--space-4); align-items: baseline; padding-block: var(--space-3); border-top: 1px solid var(--line); }
-  .step:last-child { border-bottom: 1px solid var(--line); }
-  .step-n { font-family: var(--font-display); font-size: var(--step-2); line-height: 1; color: var(--accent); }
-  .qa { display: grid; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
-  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
-  @media (min-width: 60rem) {
+  .steps { padding: 0; display: grid; gap: var(--space-3); }
+  .step { display: grid; grid-template-columns: 3rem minmax(0, 1fr); gap: var(--space-3); align-items: center; padding: var(--space-3) var(--space-4); border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
+  .step p { font-size: var(--step-0); line-height: 1.4; max-width: none; }
+  .step-n { font-family: var(--font-display); font-size: clamp(1.75rem, 1.3rem + 1.5vw, 2.5rem); line-height: 1; letter-spacing: -0.03em; color: var(--accent); transition: color 0.8s var(--ease-out) 0.3s; }
+  @media (prefers-reduced-motion: no-preference) { :global(html.js) .step:not(.is-in) .step-n { color: var(--dim); } }
+    @media (min-width: 60rem) {
     .two { grid-template-columns: 0.9fr 1.1fr; }
   }
 </style>

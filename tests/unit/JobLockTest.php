@@ -227,4 +227,46 @@ class JobLockTest extends TestCase {
 		$this->assertTrue( JobLock::is_stale( '1700000000:abcdef0123456789', 1700000120, 120 ) );
 		$this->assertFalse( JobLock::is_stale( '1700000000:abcdef0123456789', 1700000119, 120 ) );
 	}
+	public function test_option_names_for_backup_ids_and_the_restore_lock() {
+		$this->assertSame( 'ovb_lock_7', JobLock::option_name( 7 ) );
+		$this->assertSame( 'ovb_lock_7', JobLock::option_name( '7' ) );
+		$this->assertSame( 'ovb_lock_restore', JobLock::option_name( 'restore' ) );
+		$this->assertSame( 'ovb_lock_restore_start', JobLock::option_name( 'restore_start' ) );
+	}
+
+	/**
+	 * @dataProvider bad_lock_names
+	 */
+	public function test_bad_lock_names_are_refused( $name ) {
+		$this->expectException( \InvalidArgumentException::class );
+		JobLock::option_name( $name );
+	}
+
+	public function bad_lock_names() {
+		return array(
+			'upper case' => array( 'Restore' ),
+			'dash'       => array( 're-store' ),
+			'sql'        => array( "x' OR 1=1 --" ),
+			'percent'    => array( 'a%' ),
+			'too long'   => array( str_repeat( 'a', 40 ) ),
+			'empty'      => array( '' ),
+			'digit lead' => array( '1a' ),
+		);
+	}
+
+	public function test_the_restore_lock_excludes_a_second_holder_and_not_a_backup_lock() {
+		$store   = new FakeLockStore();
+		$restore = $this->lock( $store, 'restore' );
+		$other   = $this->lock( $store, 'restore' );
+		$backup  = $this->lock( $store, 7 );
+
+		$this->assertTrue( $restore->acquire( 120 ) );
+		$this->assertFalse( $other->acquire( 120 ) );
+		$this->assertTrue( $backup->acquire( 120 ) );
+		$this->assertArrayHasKey( 'ovb_lock_restore', $store->rows );
+		$this->assertArrayHasKey( 'ovb_lock_7', $store->rows );
+
+		$restore->release();
+		$this->assertTrue( $other->acquire( 120 ) );
+	}
 }

@@ -1,29 +1,58 @@
 ---
+// Shared inner-page hero: mono breadcrumb as the eyebrow, a giant split-line H1 (split at build time, one real heading),
+// a hairline that draws in, and the lede. Plays on load with pure CSS (no JS needed), static under reduced motion.
+import SplitHeading from './SplitHeading.astro';
+import { splitTitle, headTier } from '../lib/split';
+
 interface Props { crumb: string; path: string; title: string; trail?: { name: string; href: string }[] }
 const { crumb, title, trail = [] } = Astro.props;
+const lines = splitTitle(title);
+const tier = headTier(lines);
+const hasVisual = Astro.slots.has('visual');
 ---
 
-<section class="page-head">
-  <div class="container stack-lg">
-    <nav aria-label="Breadcrumb" class="crumbs small">
+<section class={`page-head ${hasVisual ? "has-visual" : ""}`}>
+  <div class="ph-grid" aria-hidden="true"></div>
+  <div class="container ph-in">
+    <div class="ph-copy">
+    <nav aria-label="Breadcrumb" class="crumbs mono" data-reveal-now="fade" style="--i:0">
       <a href="/">Home</a>
       <span aria-hidden="true">/</span>
       {trail.map((t) => (<><a href={t.href}>{t.name}</a><span aria-hidden="true">/</span></>))}
       <span aria-current="page">{crumb}</span>
     </nav>
-    <h1>{title}</h1>
-    <div class="lede-wrap"><slot /></div>
+    <SplitHeading as="h1" now class={`ph-h1 ph-${tier}`} lines={lines} />
+    <hr class="ph-rule" />
+    <div class="lede-wrap" data-reveal-now="fade" style="--i:4"><slot /></div>
+    </div>
+    {hasVisual && <div class="ph-visual" data-reveal-now="fade" style="--i:5"><slot name="visual" /></div>}
   </div>
 </section>
 
 <style>
-  .page-head { padding-block: var(--space-8) var(--space-7); border-bottom: 1px solid var(--line);
-    background: radial-gradient(50rem 24rem at 90% 0%, rgb(224 164 88 / 0.06), transparent 70%); }
-  h1 { font-size: var(--step-4); max-width: 20ch; }
-  .crumbs { display: flex; flex-wrap: wrap; gap: var(--space-2); color: var(--muted); }
-  .crumbs a { color: var(--muted); }
+  .page-head { position: relative; isolation: isolate; overflow: clip; padding-block: var(--space-8) var(--space-7); border-bottom: 1px solid var(--line);
+    background: radial-gradient(46rem 22rem at 88% 0%, rgb(224 164 88 / 0.1), transparent 70%); }
+  .ph-grid { position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: 0.5;
+    background-image: linear-gradient(90deg, var(--line) 1px, transparent 1px); background-size: calc(100% / 6) 100%;
+    -webkit-mask-image: linear-gradient(180deg, #000, transparent 90%); mask-image: linear-gradient(180deg, #000, transparent 90%); }
+  .ph-in { display: grid; gap: var(--space-7); align-items: center; }
+  .ph-copy { display: grid; gap: var(--space-5); min-width: 0; }
+  .ph-visual { min-width: 0; }
+  .ph-visual :global(.art) { max-width: 22rem; margin-inline: auto; }
+  @media (min-width: 64rem) { .has-visual .ph-in { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); } .has-visual :global(.ph-xl), .has-visual :global(.ph-lg) { font-size: clamp(2.5rem, 1rem + 4.2vw, 5.25rem); } .has-visual :global(.ph-md) { font-size: clamp(2.25rem, 1rem + 3.4vw, 4.25rem); } }
+  .crumbs { display: flex; flex-wrap: wrap; gap: 0.6em; color: var(--muted); }
+  .crumbs a { color: var(--muted); text-decoration: none; }
   .crumbs a:hover { color: var(--accent); }
-  .crumbs [aria-current] { color: var(--text); }
+  .crumbs [aria-current] { color: var(--accent); }
+  :global(.ph-h1) { max-width: none; text-wrap: initial; line-height: 0.96; letter-spacing: -0.03em; }
+  :global(.ph-xl) { font-size: clamp(2.75rem, 1rem + 8vw, 8.5rem); }
+  :global(.ph-lg) { font-size: clamp(2.5rem, 1rem + 6.2vw, 6.5rem); }
+  :global(.ph-md) { font-size: clamp(2.25rem, 1rem + 4.4vw, 5rem); }
+  .ph-rule { margin: var(--space-2) 0 0; border: 0; border-top: 1px solid var(--accent); transform-origin: left; }
   .lede-wrap :global(p) { font-size: var(--step-1); color: var(--muted); line-height: 1.55; max-width: 58ch; }
   .lede-wrap :global(p + p) { margin-top: var(--space-3); }
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.js) .ph-rule { animation: ph-draw 1.3s var(--ease-out) calc(var(--pl-wait, 0s) + 0.55s) both; }
+  }
+  @keyframes ph-draw { from { transform: scaleX(0); } }
 </style>

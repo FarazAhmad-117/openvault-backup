@@ -1,6 +1,8 @@
 ---
 import Base from '../layouts/Base.astro';
 import PageHead from '../components/PageHead.astro';
+import Icon from '../components/Icon.astro';
+import Parts from '../components/art/Parts.astro';
 import { repoUrl, siteUrl } from '../config/site';
 import { breadcrumbs } from '../lib/jsonld';
 
@@ -24,18 +26,23 @@ const axes = [
 <Base title="Open source" description={description} path="/open-source/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Open source" path="/open-source/" title="Free software, in the open">
     <p>OpenVault Backup is released under the GPLv2 or later. You can read it, run it, change it and share it.</p>
+    <div slot="visual" aria-hidden="true"><Parts /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <h2 class="sec-title">Licences</h2>
-      <dl class="lic">
-        <div>
-          <dt>OpenVault Backup</dt>
+      <div class="stack">
+        <p class="eyebrow" data-reveal>Licences</p>
+        <p class="statement" data-reveal>Read it. Run it.<br />Change it. Share it.</p>
+      </div>
+      <h2 class="visually-hidden">Licences</h2>
+      <dl class="lic" data-reveal="stagger">
+        <div class="card">
+          <dt><span class="card-ico"><Icon name="scale" size={22} /></span>OpenVault Backup</dt>
           <dd>GPLv2 or later. Free to use, with no paid tiers and no locked features.</dd>
         </div>
-        <div>
-          <dt>Action Scheduler</dt>
+        <div class="card">
+          <dt><span class="card-ico"><Icon name="plug" size={22} /></span>Action Scheduler</dt>
           <dd>Bundled for background jobs, under the GPLv3. It is included unmodified and is updated by replacing the folder with a new release.</dd>
         </div>
       </dl>
@@ -45,16 +52,20 @@ const axes = [
 
   <section class="section section--surface">
     <div class="container stack-lg">
-      <h2 class="sec-title">How to help</h2>
-      <ul role="list" class="ways">
-        {ways.map((w) => (
-          <li class="way">
+      <div class="stack">
+        <p class="eyebrow" data-reveal>Contribute</p>
+        <h2 class="sec-title" data-reveal>How to help</h2>
+      </div>
+      <ol role="list" class="ways" data-reveal="stagger">
+        {ways.map((w, i) => (
+          <li class="way card">
+            <span class="numeral wn" aria-hidden="true">{i + 1}</span>
             <h3>{w.title}</h3>
             <p class="muted">{w.text}</p>
             <a class="link" href={w.href} rel={w.href.startsWith('http') ? 'noopener' : undefined}>{w.cta}</a>
           </li>
         ))}
-      </ul>
+      </ol>
       <p class="muted">New here? The <a class="link" href={`${repoUrl()}/issues`} rel="noopener">issue tracker</a> is the place to find small tasks and to ask what is open for help.</p>
     </div>
   </section>
@@ -62,13 +73,14 @@ const axes = [
   <section class="section">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">A Docker test matrix</h2>
+        <p class="eyebrow" data-reveal>Quality</p>
+        <h2 class="sec-title" data-reveal>A Docker test matrix</h2>
         <p class="lede">The release zip, the same file users download, is installed into real WordPress sites across combinations of PHP, WordPress and database.</p>
         <p class="muted">You only need Docker. Add a row to a profile list to add an environment. It checks that the plugin installs and activates, creates its tables, runs a queued job through Action Scheduler, renders every admin page over real HTTP and logs no PHP warnings. It does not yet cover Nginx, a real shared host or large sites.</p>
       </div>
-      <dl class="axes">
+      <dl class="axes" data-reveal="stagger">
         {axes.map(([k, v]) => (
-          <div><dt>{k}</dt><dd>{v}</dd></div>
+          <div class="card"><dt class="mono">{k}</dt><dd>{v}</dd></div>
         ))}
       </dl>
     </div>
@@ -76,24 +88,25 @@ const axes = [
 </Base>
 
 <style>
-  .lic { display: grid; border-top: 1px solid var(--line-strong); }
-  .lic div { display: grid; gap: var(--space-2) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); }
-  .lic dt { font-family: var(--font-display); font-size: var(--step-2); line-height: 1.1; }
+  .lic { display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .statement { font-family: var(--font-display); font-size: clamp(2.5rem, 1rem + 6vw, 6.5rem); line-height: 0.98; letter-spacing: -0.03em; max-width: 14ch; }
+  .lic dt { display: grid; gap: var(--space-3); justify-items: start; font-family: var(--font-display); font-size: var(--step-2); line-height: 1.1; }
+  .wn { font-size: clamp(3.5rem, 2rem + 5vw, 6rem); }
   .lic dd { margin: 0; color: var(--muted); max-width: 56ch; }
 
   .ways { padding: 0; display: grid; gap: var(--space-6); }
-  .way { display: grid; gap: var(--space-3); align-content: start; justify-items: start; border-top: 1px solid var(--accent); padding-top: var(--space-5); }
+  .ways { list-style: none; }
+  .way { justify-items: start; }
+  .way h3 { font-size: var(--step-2); }
 
   .two { display: grid; gap: var(--space-7); }
-  .axes { display: grid; margin: 0; border-top: 1px solid var(--line-strong); align-self: start; }
-  .axes div { display: grid; gap: var(--space-1) var(--space-5); padding-block: var(--space-4); border-bottom: 1px solid var(--line); }
-  .axes dt { color: var(--accent); font-weight: 600; font-size: var(--step--1); }
+  .axes { display: grid; gap: var(--space-3); margin: 0; align-self: start; }
+  .axes dt { color: var(--accent); }
   .axes dd { margin: 0; }
 
   @media (min-width: 48rem) {
-    .lic div { grid-template-columns: 14rem minmax(0, 1fr); align-items: baseline; }
+    .lic { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .ways { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .axes div { grid-template-columns: 9rem minmax(0, 1fr); }
   }
   @media (min-width: 60rem) {
     .two { grid-template-columns: 1fr 1fr; }

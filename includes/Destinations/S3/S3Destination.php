@@ -29,6 +29,7 @@ namespace OpenVault\Backup\Destinations\S3;
 use OpenVault\Backup\Destinations\DestinationException;
 use OpenVault\Backup\Destinations\DestinationInterface;
 use OpenVault\Backup\Destinations\RemotePath;
+use OpenVault\Backup\Destinations\ResumableDownloadInterface;
 use OpenVault\Backup\Destinations\TestResult;
 use OpenVault\Backup\Destinations\UploadProgress;
 use OpenVault\Backup\Engine\Budget;
@@ -38,7 +39,7 @@ defined( 'ABSPATH' ) || exit;
 /**
  * S3-compatible destination.
  */
-class S3Destination implements DestinationInterface {
+class S3Destination implements DestinationInterface, ResumableDownloadInterface {
 
 	const RANGE = 8388608;
 
@@ -236,13 +237,26 @@ class S3Destination implements DestinationInterface {
 	 * @throws DestinationException When missing or unreadable.
 	 */
 	public function download( $remote_ref, callable $sink ) {
+		$this->download_from( $remote_ref, 0, $sink );
+	}
+
+	/**
+	 * Stream an object in 8 MiB ranges, starting at a byte offset.
+	 *
+	 * @param string   $remote_ref Reference.
+	 * @param int      $offset     First byte to send.
+	 * @param callable $sink       Receives chunks; false stops.
+	 * @return void
+	 * @throws DestinationException When missing or unreadable.
+	 */
+	public function download_from( $remote_ref, $offset, callable $sink ) {
 		$key    = $this->key( $remote_ref );
 		$client = $this->client();
 		$head   = $client->head_object( $key );
 		if ( null === $head ) {
 			throw DestinationException::permanent( __( 'The file does not exist in the bucket.', 'openvault-backup' ) );
 		}
-		for ( $start = 0; $start < $head['size']; $start += self::RANGE ) {
+		for ( $start = max( 0, (int) $offset ); $start < $head['size']; $start += self::RANGE ) {
 			$end   = min( $head['size'], $start + self::RANGE ) - 1;
 			$chunk = $this->range( $client, $key, $start, $end );
 			if ( false === call_user_func( $sink, $chunk ) ) {

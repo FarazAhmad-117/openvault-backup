@@ -3,6 +3,8 @@ import { getCollection } from 'astro:content';
 import Base from '../../layouts/Base.astro';
 import PageHead from '../../components/PageHead.astro';
 import StatusBadge from '../../components/StatusBadge.astro';
+import Icon from '../../components/Icon.astro';
+import Folder from '../../components/art/Folder.astro';
 import { siteUrl } from '../../config/site';
 import { statusOf } from '../../lib/registry';
 import { breadcrumbs } from '../../lib/jsonld';
@@ -22,6 +24,7 @@ const meta: { id: string; summary: string; feature?: string }[] = [
   { id: 'server-cron', summary: 'Why WP-Cron only runs when someone visits, and how to trigger it from a real server cron instead.' },
 ];
 
+const iconFor = (id: string) => (id === 'server-cron' ? 'clock' : id === 'dropbox' || id === 'onedrive' ? 'archive' : id === 'google-drive-setup' ? 'folder' : 'cloud');
 const entries = await getCollection('guides');
 const byId = new Map(entries.map((e) => [e.id, e]));
 const guides = meta
@@ -32,15 +35,17 @@ const guides = meta
 <Base title="Docs" description={description} path="/docs/" jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Docs" path="/docs/" title="Setup guides">
     <p>These guides are outlines. They sketch the planned setup for each destination and will grow into full walkthroughs with screenshots as each destination ships.</p>
-    <p>S3-compatible storage and local folders work in 0.2.0 (pre-alpha), but these guides are still outlines, and Google Drive, Dropbox and OneDrive do not work yet. Each guide shows the real status of the feature it covers.</p>
+    <p>S3-compatible storage and local folders work in 0.3.0 (pre-alpha), but these guides are still outlines, and Google Drive, Dropbox and OneDrive do not work yet. Each guide shows the real status of the feature it covers.</p>
+    <div slot="visual" aria-hidden="true"><Folder /></div>
   </PageHead>
 
   <section class="section">
     <div class="container">
       <h2 class="visually-hidden">All guides</h2>
-      <ul role="list" class="guides">
+      <ul role="list" class="guides" data-reveal="stagger">
         {guides.map((g) => (
-          <li class="guide">
+          <li><article class="card guide">
+            <span class="card-ico"><Icon name={iconFor(g.id)} size={22} /></span>
             <div class="g-body">
               <h3><a href={g.href}>{g.title}</a></h3>
               <p class="muted">{g.summary}</p>
@@ -49,7 +54,7 @@ const guides = meta
               <span class="tag">Outline</span>
               {g.status && <StatusBadge status={g.status} />}
             </div>
-          </li>
+          </article></li>
         ))}
       </ul>
     </div>
@@ -57,17 +62,15 @@ const guides = meta
 </Base>
 
 <style>
-  .guides { padding: 0; display: grid; }
-  .guide { display: grid; gap: var(--space-3) var(--space-6); padding-block: var(--space-6); border-top: 1px solid var(--line-strong); }
-  .guide:last-child { border-bottom: 1px solid var(--line-strong); }
+  .guides { padding: 0; display: grid; gap: var(--space-4); grid-template-columns: minmax(0, 1fr); }
+  .guides > li { display: grid; }
   .g-body { display: grid; gap: var(--space-2); }
-  .g-body h3 { font-size: var(--step-2); }
+  .g-body h3 { font-size: var(--step-2); line-height: 1.1; }
   .g-body h3 a { text-decoration: none; }
   .g-body h3 a:hover { text-decoration: underline; }
-  .g-body p { max-width: 56ch; }
+  .g-body p { max-width: none; }
   .g-tags { display: flex; flex-wrap: wrap; align-items: start; gap: var(--space-2); }
   .tag { display: inline-flex; padding: 0.2em 0.75em; border: 1px dashed var(--line-strong); border-radius: 999px; font-size: var(--step--1); font-weight: 600; line-height: 1.5; color: var(--muted); }
-  @media (min-width: 48rem) {
-    .guide { grid-template-columns: minmax(0, 1fr) 14rem; align-items: start; }
-  }
+  @media (min-width: 48rem) { .guides { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 64rem) { .guides { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 </style>

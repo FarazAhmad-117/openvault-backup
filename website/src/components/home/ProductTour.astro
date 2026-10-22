@@ -1,0 +1,78 @@
+---
+// Product tour: a pinned device frame that swaps REAL screenshots as you scroll through 4 steps.
+// One DOM for both modes: each step is text + frame. Pinned (wide screens, JS, motion): the steps overlap and cross-fade by data-stage.
+// Otherwise (phones, no JS, reduced motion) the four steps are simply stacked, each with its own screenshot.
+import ProductFrame from '../ProductFrame.astro';
+import StatusBadge from '../StatusBadge.astro';
+import SplitHeading from '../SplitHeading.astro';
+import { statusOf } from '../../lib/registry';
+import { shots } from '../../data/product';
+
+const steps = [
+  { n: '01', title: 'Choose what to back up', text: 'Database, plugins, themes, uploads. Pick ZIP or TAR.GZ.', shot: shots.form, id: 'backup-manual' },
+  { n: '02', title: 'Watch it work', text: 'Small resumable slices with live progress. A slow host cannot stop it.', shot: shots.progress, id: 'backup-manual' },
+  { n: '03', title: 'Send a copy to your own bucket', text: 'S3-compatible storage with your own keys. Verified live on one server so far.', shot: shots.destinations, id: 'destination-s3' },
+  { n: '04', title: 'Download or keep', text: 'Authenticated downloads, a lock against deletion, a note for yourself.', shot: shots.history, id: 'backup-manage' },
+];
+---
+
+<section class="tour band-ultra" data-scrub="track" data-stages="4" aria-labelledby="tour-h">
+  <div class="stage">
+    <div class="container head">
+      <p class="eyebrow" data-reveal>Product tour</p>
+      <SplitHeading id="tour-h" class="h-xl" lines={['From click to', 'copy, in four steps.']} />
+    </div>
+    <div class="container">
+      <ol role="list" class="steps">
+        {steps.map((s, i) => (
+          <li class={`step s${i}`}>
+            <div class="txt">
+              <span class="mono num">{s.n} / 04</span>
+              <h3>{s.title}</h3>
+              <p>{s.text}</p>
+              <StatusBadge status={statusOf(s.id)} />
+            </div>
+            <ProductFrame {...s.shot} sizes="(min-width: 64rem) 640px, 92vw" glow={false} />
+          </li>
+        ))}
+      </ol>
+      <ol role="list" class="rail" aria-hidden="true">
+        {steps.map((s) => (<li><i></i><span class="mono">{s.n}</span></li>))}
+      </ol>
+    </div>
+  </div>
+</section>
+
+<style>
+  .tour { position: relative; --p: 1; }
+  .stage { padding-block: var(--space-9); display: grid; gap: var(--space-7); }
+  .head { display: grid; gap: var(--space-4); }
+  .steps { padding: 0; display: grid; gap: var(--space-8); }
+  .step { display: grid; gap: var(--space-5); align-items: center; }
+  .txt { display: grid; gap: var(--space-3); justify-items: start; }
+  .num { color: var(--accent); }
+  .txt h3 { font-size: clamp(1.75rem, 1.2rem + 2vw, 2.75rem); line-height: 1.05; }
+  .txt p { color: var(--muted); max-width: 30ch; }
+  .rail { display: none; }
+
+  @media (min-width: 60rem) {
+    .step { grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--space-8); }
+    .steps { gap: var(--space-9); }
+  }
+  /* pinned mode */
+  @media (min-width: 60rem) and (prefers-reduced-motion: no-preference) {
+    :global(html.js) .tour { --p: 0; height: 420svh; padding: 0; }
+    :global(html.js) .stage { position: sticky; top: 0; height: 100svh; padding-block: 5.5rem var(--space-6); gap: var(--space-5); align-content: center; overflow: hidden; }
+    :global(html.js) .head :global(.h-xl) { font-size: clamp(2rem, 1rem + 2.6vw, 3.5rem); max-width: none; }
+    :global(html.js) .steps { grid-template-areas: 'one'; gap: 0; }
+    :global(html.js) .step { grid-area: one; opacity: 0; transform: translate3d(0, 1.5rem, 0); pointer-events: none; transition: opacity 0.6s var(--ease-out), transform 0.8s var(--ease-out); }
+    :global(html.js) .tour:not([data-stage]) .s0,
+    :global(html.js) .tour[data-stage='0'] .s0, :global(html.js) .tour[data-stage='1'] .s1, :global(html.js) .tour[data-stage='2'] .s2, :global(html.js) .tour[data-stage='3'] .s3 { opacity: 1; transform: none; pointer-events: auto; }
+    :global(html.js) .rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-3); padding: 0; margin-top: var(--space-5); }
+    :global(html.js) .rail li { display: grid; gap: 0.5rem; color: var(--dim); }
+    :global(html.js) .rail i { height: 2px; background: var(--line-strong); position: relative; overflow: hidden; }
+    :global(html.js) .rail i::after { content: ''; position: absolute; inset: 0; background: var(--accent); transform-origin: left; transform: scaleX(clamp(0, calc(var(--p) * 4 - var(--k)), 1)); }
+    :global(html.js) .rail li:nth-child(1) { --k: 0; } :global(html.js) .rail li:nth-child(2) { --k: 1; }
+    :global(html.js) .rail li:nth-child(3) { --k: 2; } :global(html.js) .rail li:nth-child(4) { --k: 3; }
+  }
+</style>

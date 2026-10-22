@@ -25,4 +25,11 @@ const { status } = Astro.props;
   .badge--available { --c: var(--ok); }
   .badge--in-progress { --c: var(--warn); }
   .badge--planned { --c: var(--soft); }
+  @media (prefers-reduced-motion: no-preference) {
+    .badge--in-progress .dot { animation: pulse 2.2s ease-out infinite; }
+  }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); }
+    70%, 100% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--c) 0%, transparent); }
+  }
 </style>

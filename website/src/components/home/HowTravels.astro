@@ -1,0 +1,123 @@
+---
+// "How a backup travels": pinned scroll sequence. --p (0..1) and data-stage (0..4) come from src/motion/scrub.ts.
+// The path draws in with scroll, nodes light up in order, and the matching step is highlighted.
+// Without JS / with reduced motion: all five steps are listed and the path is fully drawn.
+// Every status badge is read from the feature registry (src/data/features.ts).
+import StatusBadge from '../StatusBadge.astro';
+import { statusOf } from '../../lib/registry';
+
+const steps = [
+  { label: 'WordPress', title: 'Your WordPress site', text: 'The plugin reads your database and files in small batches and saves its place, so a 30 second host limit does not end the job.', id: 'backup-manual' },
+  { label: 'Parts', title: 'Split into parts', text: 'The backup is written as ZIP or TAR.GZ archives, split into parts, so one big site never needs one giant file.', id: 'backup-manual' },
+  { label: 'manifest.json', title: 'A checksummed manifest', text: 'A manifest.json is written next to the archives with the size and a SHA-256 checksum of every part, so a fresh install can find and check them.', id: 'backup-manual' },
+  { label: 'Your storage', title: 'Your own bucket or folder', text: 'A copy goes to S3-compatible storage with your own keys, or to another folder. S3 has been verified live against one server (SeaweedFS) so far; the other providers follow documented endpoint patterns.', id: 'destination-s3' },
+  { label: 'Restore', title: 'Restore, when you need it', text: 'Restore a backup of this site from history. A safety snapshot is taken first and Undo brings it back. Pre-alpha: try it on a copy first.', id: 'restore-in-place' },
+];
+const pts = [[60, 140], [190, 240], [320, 140], [450, 240], [580, 140]];
+---
+
+<section class="travel" data-scrub="track" data-stages="5" aria-labelledby="travel-h">
+  <div class="stage">
+    <div class="container grid">
+      <div class="copy">
+        <p class="eyebrow">The flow, step by step</p>
+        <h2 id="travel-h" class="h">How a backup travels</h2>
+        <ol role="list" class="steps">
+          {steps.map((s, i) => (
+            <li class={`step s${i}`}>
+              <div class="head">
+                <span class="mono n">0{i + 1}</span>
+                <h3>{s.title}</h3>
+                <StatusBadge status={statusOf(s.id)} />
+              </div>
+              <div class="more"><p class="muted">{s.text}</p></div>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div class="diagram">
+        <svg viewBox="0 0 640 380" aria-hidden="true" focusable="false">
+          <path class="rail" d="M60 140 C 125 140 125 240 190 240 S 255 140 320 140 S 385 240 450 240" pathLength="1" />
+          <path class="line" d="M60 140 C 125 140 125 240 190 240 S 255 140 320 140 S 385 240 450 240" pathLength="1" />
+          <path class="ghost" d="M450 240 C 515 240 515 140 580 140" />
+          {pts.map(([x, y], i) => (
+            <g class={`node n${i}${i === 4 ? ' node--ghost' : ''}`} style={`--t:${(i * 0.2).toFixed(1)}`} transform={`translate(${x} ${y})`}>
+              <circle class="halo" r="26" />
+              <circle class="ring" r="15" />
+              <circle class="dot" r="5" />
+              <text class="lbl" y={y > 190 ? 50 : -34} text-anchor="middle">{steps[i].label}</text>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .travel { --p: 1; position: relative; border-block: 1px solid var(--line); background: var(--surface); }
+  .stage { padding-block: var(--space-9); }
+  .grid { display: grid; gap: var(--space-7); align-items: center; }
+  .h { font-size: clamp(2.5rem, 1.2rem + 4.8vw, 5.5rem); line-height: 0.98; margin: var(--space-3) 0 var(--space-6); max-width: 12ch; }
+  .steps { padding: 0; display: grid; }
+  .step { border-top: 1px solid var(--line-strong); padding-block: var(--space-4); }
+  .step:last-child { border-bottom: 1px solid var(--line-strong); }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--space-2) var(--space-4); }
+  .n { color: var(--accent); }
+  .head h3 { font-size: var(--step-2); }
+  .head :global(.badge) { margin-left: auto; }
+  .more p { margin-top: var(--space-2); max-width: 46ch; }
+
+  svg { width: 100%; height: auto; overflow: visible; }
+  .rail { fill: none; stroke: var(--line-strong); stroke-width: 1.5; }
+  .line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; filter: drop-shadow(0 0 6px rgb(224 164 88 / 0.6)); }
+  .ghost { fill: none; stroke: var(--soft); stroke-width: 1.5; stroke-dasharray: 5 7; opacity: 0.7; }
+  .halo { fill: var(--glow); opacity: 0; }
+  .ring { fill: var(--bg); stroke: var(--accent); stroke-width: 2; }
+  .dot { fill: var(--accent); }
+  .lbl { font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; fill: var(--text); }
+  .node--ghost .ring { stroke: var(--soft); stroke-dasharray: 3 4; }
+  .node--ghost .dot { fill: var(--soft); }
+
+  /* pinned + scroll-driven (only with JS and motion) */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(html.js) .travel { --p: 0; height: 440svh; padding: 0; }
+    :global(html.js) .stage { position: sticky; top: 0; height: 100svh; padding-block: 5rem var(--space-6); display: grid; align-items: center; }
+    :global(html.js) .line { stroke-dashoffset: calc(1 - clamp(0, calc(var(--p) / 0.6), 1)); }
+    :global(html.js) .node { --on: clamp(0, calc((var(--p) - var(--t)) * 30), 1); }
+    :global(html.js) .node .ring, :global(html.js) .node .dot, :global(html.js) .node .lbl { opacity: calc(0.3 + var(--on) * 0.7); }
+    :global(html.js) .node .dot { transform-box: fill-box; transform-origin: center; transform: scale(calc(0.4 + var(--on) * 0.6)); }
+    /* only the current step shows its text */
+    :global(html.js) .more { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.5s var(--ease-out); }
+    :global(html.js) .more > p { overflow: hidden; min-height: 0; margin-top: 0; }
+    :global(html.js) .step .head h3 { color: var(--dim); transition: color 0.4s; }
+    :global(html.js) .travel[data-stage='0'] .s0 .more, :global(html.js) .travel[data-stage='1'] .s1 .more, :global(html.js) .travel[data-stage='2'] .s2 .more,
+    :global(html.js) .travel[data-stage='3'] .s3 .more, :global(html.js) .travel[data-stage='4'] .s4 .more { grid-template-rows: 1fr; }
+    :global(html.js) .travel[data-stage='0'] .s0 .head h3, :global(html.js) .travel[data-stage='1'] .s1 .head h3, :global(html.js) .travel[data-stage='2'] .s2 .head h3,
+    :global(html.js) .travel[data-stage='3'] .s3 .head h3, :global(html.js) .travel[data-stage='4'] .s4 .head h3 { color: var(--text); }
+    :global(html.js) .travel:not([data-stage]) .s0 .more { grid-template-rows: 1fr; }
+    :global(html.js) .travel:not([data-stage]) .s0 .head h3 { color: var(--text); }
+    :global(html.js) .travel[data-stage='0'] .n0 .halo, :global(html.js) .travel[data-stage='1'] .n1 .halo, :global(html.js) .travel[data-stage='2'] .n2 .halo,
+    :global(html.js) .travel[data-stage='3'] .n3 .halo, :global(html.js) .travel[data-stage='4'] .n4 .halo { opacity: 1; }
+    .halo { transition: opacity 0.5s; }
+  }
+  @media (min-width: 60rem) {
+    .grid { grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-8); }
+  }
+  @media (max-width: 59.99rem) {
+    .lbl { display: none; }
+    @media (prefers-reduced-motion: no-preference) {
+      :global(html.js) .stage { padding-top: 4.5rem; }
+      :global(html.js) .grid { gap: var(--space-4); }
+      :global(html.js) .h { font-size: 2.25rem; margin-bottom: var(--space-3); }
+      :global(html.js) .diagram { order: -1; }
+      :global(html.js) .copy .eyebrow { display: none; }
+      /* one step at a time on small screens */
+      :global(html.js) .step { display: none; }
+      :global(html.js) .travel:not([data-stage]) .s0,
+      :global(html.js) .travel[data-stage='0'] .s0, :global(html.js) .travel[data-stage='1'] .s1, :global(html.js) .travel[data-stage='2'] .s2,
+      :global(html.js) .travel[data-stage='3'] .s3, :global(html.js) .travel[data-stage='4'] .s4 { display: block; border-bottom: 1px solid var(--line-strong); }
+    }
+  }
+</style>

@@ -2,6 +2,8 @@
 import Base from '../../../layouts/Base.astro';
 import PageHead from '../../../components/PageHead.astro';
 import StatusBadge from '../../../components/StatusBadge.astro';
+import Icon from '../../../components/Icon.astro';
+import VaultDoor from '../../../components/art/VaultDoor.astro';
 import { repoUrl, siteUrl } from '../../../config/site';
 import { statusOf } from '../../../lib/registry';
 import { breadcrumbs } from '../../../lib/jsonld';
@@ -15,33 +17,35 @@ export function getStaticPaths() {
 const { competitor } = Astro.props;
 const path = `/compare/${competitor.slug}/`;
 const trail = [{ name: 'Home', path: '/' }, { name: 'Compare', path: '/compare/' }, { name: `OpenVault vs ${competitor.name}`, path }];
-const description = `OpenVault Backup vs ${competitor.name}: what OpenVault is designed to do (pre-alpha: no restore or schedules yet) next to ${competitor.name}'s own sourced facts.`;
+const description = `OpenVault Backup vs ${competitor.name}: what OpenVault is designed to do (pre-alpha: no schedules yet) next to ${competitor.name}'s own sourced facts.`;
 const fits = fitCompetitor[competitor.slug];
 ---
 
 <Base title={`OpenVault vs ${competitor.name}`} description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb={`vs ${competitor.name}`} path={path} title={`OpenVault vs ${competitor.name}`} trail={[{ name: 'Compare', href: '/compare/' }]}>
     <p>{competitor.summary} OpenVault Backup is a free, open-source plugin that is still pre-alpha, so this page compares its design with what {competitor.name} says about itself.</p>
+    <div slot="visual" aria-hidden="true"><VaultDoor /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <div class="warn-box" role="note">
-        <h2>OpenVault cannot restore, schedule or use Google Drive yet</h2>
-        <p>OpenVault 0.2.0 backs up to your server, S3-compatible storage and a folder. Every OpenVault statement below is a design unless its badge says Available. If you need working backups today, keep or choose a released plugin.</p>
+      <div class="warn-box" role="note" data-reveal>
+        <h2>OpenVault cannot schedule backups or use Google Drive yet</h2>
+        <p>OpenVault 0.3.0 backs up to your server, S3-compatible storage and a folder, and restores a backup of this site from its history. Every OpenVault statement below is a design unless its badge says Available. If you need working backups today, keep or choose a released plugin.</p>
       </div>
 
-      <h2 class="sec-title">At a glance</h2>
+      <div class="stack"><p class="eyebrow" data-reveal>Side by side</p><h2 class="sec-title" data-reveal>At a glance</h2></div>
+      <div class="cols-head mono" aria-hidden="true"><span>Topic</span><span>OpenVault (design)</span><span>{competitor.name} (sourced)</span></div>
       <ul role="list" class="ledger">
         {topicOrder.map((topic) => {
           const facts = factsFor(competitor, topic);
           const d = openvaultDesign[topic];
           return (
-            <li class="row">
+            <li class="row card" data-reveal>
               <h3 class="topic">{topicLabels[topic]}</h3>
               <div class="cell">
                 <p class="who small muted">OpenVault (design)</p>
-                <p>{d.text}</p>
+                <p class={`fact ${d.badges.length === 0 || d.badges.some(([, id]) => statusOf(id) === 'available') ? '' : 'no'}`}><Icon name={d.badges.length === 0 || d.badges.some(([, id]) => statusOf(id) === 'available') ? 'check' : 'dash'} size={18} /><span>{d.text}</span></p>
                 <ul role="list" class="tags">
                   {d.badges.length > 0 ? d.badges.map(([n, id]) => (
                     <li><span class="small muted">{n}</span> <StatusBadge status={statusOf(id)} /></li>
@@ -51,8 +55,8 @@ const fits = fitCompetitor[competitor.slug];
               <div class="cell">
                 <p class="who small muted">{competitor.name} (as stated by the source)</p>
                 {facts.length > 0 ? facts.map((x) => (
-                  <p>{x.claim} <a class="link small" href={x.source} rel="noopener nofollow">Source</a> <span class="small muted">(checked {x.checkedOn})</span></p>
-                )) : <p class="muted">Not verified</p>}
+                  <p class="fact"><Icon name="check" size={18} /><span>{x.claim} <a class="link small" href={x.source} rel="noopener nofollow">Source</a> <span class="small muted">(checked {x.checkedOn})</span></span></p>
+                )) : <p class="fact no muted"><Icon name="dash" size={18} /><span>Not verified</span></p>}
               </div>
             </li>
           );
@@ -63,7 +67,7 @@ const fits = fitCompetitor[competitor.slug];
 
   <section class="section section--surface">
     <div class="container two">
-      <div class="stack"><h2 class="sec-title">Where each approach fits</h2></div>
+      <div class="stack"><h2 class="sec-title" data-reveal>Where each approach fits</h2></div>
       <div class="stack-lg">
         <div class="stack">
           <h3>Reasons to choose {competitor.name} today</h3>
@@ -74,7 +78,7 @@ const fits = fitCompetitor[competitor.slug];
           <ul class="bul">
             <li class="muted">All features free under the GPLv2 or later, with no paid tiers.</li>
             <li class="muted">Your own cloud credentials, with no relay server.</li>
-            <li class="muted">Resumable chunked jobs, a manifest.json beside every backup, and a safety snapshot before every restore.</li>
+            <li class="muted">Resumable chunked jobs, a manifest.json beside every backup, and a safety snapshot before every restore (restore is pre-alpha in 0.3.0).</li>
           </ul>
           <p class="muted">These are goals for a project that has not shipped a working backup. Judge it by its <a class="link" href="/roadmap/">roadmap</a>, not by this page.</p>
         </div>
@@ -84,7 +88,7 @@ const fits = fitCompetitor[competitor.slug];
 
   <section class="section">
     <div class="container stack">
-      <h2 class="sec-title">Sources and corrections</h2>
+      <h2 class="sec-title" data-reveal>Sources and corrections</h2>
       <p class="muted">Information checked on {CHECKED_ON}; sources linked; plans change, please verify. Spotted a mistake? <a class="link" href={`${repoUrl()}/issues`} rel="noopener">Open an issue</a>.</p>
       <p class="muted">Official pages: <a class="link" href={competitor.wporgUrl} rel="noopener nofollow">{competitor.name} on WordPress.org</a>, <a class="link" href={competitor.officialUrl} rel="noopener nofollow">{competitor.name} website</a>.</p>
       <p class="small muted">{TRADEMARK_NOTICE}</p>
@@ -94,9 +98,15 @@ const fits = fitCompetitor[competitor.slug];
 </Base>
 
 <style>
-  .ledger { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
-  .row { display: grid; gap: var(--space-4) var(--space-6); padding-block: var(--space-5); border-bottom: 1px solid var(--line); min-width: 0; }
-  .topic { font-size: var(--step-1); }
+  .ledger { padding: 0; }
+  .cols-head { display: none; color: var(--accent); padding-bottom: var(--space-3); }
+  .ledger { display: grid; gap: var(--space-4); }
+  .row { display: grid; gap: var(--space-4) var(--space-6); min-width: 0; }
+  .topic { font-size: var(--step-2); line-height: 1.1; }
+  .fact { display: flex; gap: var(--space-2); align-items: flex-start; }
+  .fact :global(.icon) { flex: none; margin-top: 0.2rem; color: var(--ok); }
+  .fact.no :global(.icon) { color: var(--muted); }
+  .cell:first-of-type { padding-left: var(--space-4); border-left: 2px solid var(--accent); }
   .cell { display: grid; gap: var(--space-2); min-width: 0; overflow-wrap: anywhere; align-content: start; }
   .cell p { max-width: 60ch; }
   .who { font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
@@ -106,7 +116,9 @@ const fits = fitCompetitor[competitor.slug];
   .two { display: grid; gap: var(--space-8); }
   .bul { padding-left: 1.2em; display: grid; gap: var(--space-2); max-width: 60ch; list-style: disc; }
   @media (min-width: 60rem) {
-    .row { grid-template-columns: 12rem minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+    .row, .cols-head { grid-template-columns: 12rem minmax(0, 1fr) minmax(0, 1fr); }
+    .cols-head { display: grid; gap: var(--space-4) var(--space-6); }
+    .row { align-items: start; }
     .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
   }
 </style>

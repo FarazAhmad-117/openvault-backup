@@ -4,6 +4,7 @@ import Base from '../../layouts/Base.astro';
 import PageHead from '../../components/PageHead.astro';
 import OutlineNotice from '../../components/OutlineNotice.astro';
 import GuideProse from '../../components/GuideProse.astro';
+import Folder from '../../components/art/Folder.astro';
 import { siteUrl } from '../../config/site';
 import { statusOf } from '../../lib/registry';
 import { breadcrumbs } from '../../lib/jsonld';
@@ -28,12 +29,13 @@ const trail = [{ name: 'Home', path: '/' }, { name: 'Docs', path: '/docs/' }, { 
 <Base title={`${title} guide (outline)`} description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb={title} path={path} title={title} trail={[{ name: 'Docs', href: '/docs/' }]}>
     <p>An outline of the planned setup. It will become a full guide with screenshots when this part of the plugin is built.</p>
+    <div slot="visual" aria-hidden="true"><Folder /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
       <OutlineNotice status={status} unavailable="this part of the plugin is not available yet" />
-      <GuideProse><Content /></GuideProse>
+      <div data-reveal><GuideProse><Content /></GuideProse></div>
       <p><a class="link" href="/docs/">Back to all guides</a></p>
     </div>
   </section>

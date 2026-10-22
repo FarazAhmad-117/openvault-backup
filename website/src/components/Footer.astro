@@ -30,7 +30,7 @@ const columns = [
     <div class="cols">
       <div class="about">
         <p class="name">{SITE_NAME}</p>
-        {preAlpha && <p class="muted small honest">OpenVault Backup is pre-alpha software. It can back up to your server, S3-compatible storage or a folder and let you download them, but it cannot restore, schedule or send backups to Google Drive yet.</p>}
+        {preAlpha && <p class="muted small honest">OpenVault Backup is pre-alpha software. It can back up to your server, S3-compatible storage or a folder and restore a backup of this site with undo, but it cannot schedule backups or send them to Google Drive yet. Try restore on a copy of your site first.</p>}
       </div>
       {columns.map((c) => (
         <nav aria-label={c.title}>
@@ -44,8 +44,10 @@ const columns = [
     <div class="legal small muted">
       <p>GPLv2 or later</p>
       <p>Not affiliated with WordPress or the WordPress Foundation.</p>
+      <a class="top mono u-draw" href="#top" data-top data-cursor="Top">Back to top <span class="arrow" aria-hidden="true">&uarr;</span></a>
     </div>
   </div>
+  <p class="wordmark" aria-hidden="true" data-spot data-reveal="lines"><span class="ln"><span class="ln-i" style="--i:0">OpenVault</span></span></p>
 </footer>
 
 <style>
@@ -60,6 +62,23 @@ const columns = [
   nav a:hover { color: var(--accent); }
   .legal { margin-top: var(--space-8); padding-top: var(--space-5); border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-6); }
   .legal p { max-width: none; }
+  .top { margin-left: auto; color: var(--text); display: inline-flex; gap: 0.6em; align-items: center; min-height: 2.75rem; }
+  .arrow { display: inline-block; transition: transform 0.5s var(--ease-out); }
+  .top:hover .arrow, .top:focus-visible .arrow { transform: translateY(-0.35em); }
+  .site-footer { position: relative; overflow: clip; padding-bottom: 0; }
+  .wordmark {
+    --mx: 50%; position: relative; isolation: isolate; max-width: none; margin: var(--space-6) 0 0; text-align: center; user-select: none;
+    font-family: var(--font-display); font-size: clamp(4.5rem, 21.5vw, 24rem); line-height: 0.82; letter-spacing: -0.03em;
+    color: var(--line-strong); /* solid colour, always visible; decorative (aria-hidden) */
+    transform: translateY(12%);
+  }
+  /* pointer spotlight = a separate glow layer over the word (blend), never the text fill */
+  .wordmark::after {
+    content: ''; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; mix-blend-mode: screen; transition: opacity 0.4s;
+    background: radial-gradient(18rem circle at var(--mx) 55%, rgb(224 164 88 / 0.6), transparent 100%);
+  }
+  @media (hover: hover) { .wordmark:hover::after { opacity: 1; } }
+  .wordmark :global(.ln) { padding-bottom: 0.2em; margin-bottom: -0.2em; }
   @media (min-width: 48rem) {
     .cols { grid-template-columns: 1.4fr repeat(3, 1fr); }
     .about { grid-column: auto; }

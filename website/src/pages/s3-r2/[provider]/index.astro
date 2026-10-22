@@ -5,6 +5,8 @@ import PageHead from '../../../components/PageHead.astro';
 import StatusBadge from '../../../components/StatusBadge.astro';
 import OutlineNotice from '../../../components/OutlineNotice.astro';
 import GuideProse from '../../../components/GuideProse.astro';
+import Icon from '../../../components/Icon.astro';
+import Buckets from '../../../components/art/Buckets.astro';
 import { siteUrl } from '../../../config/site';
 import { statusOf } from '../../../lib/registry';
 import { faqPage, breadcrumbs } from '../../../lib/jsonld';
@@ -34,33 +36,37 @@ const others = providers.filter((p) => p.slug !== provider.slug);
 <Base title={`Back up WordPress to ${provider.name}`} description={description} path={path} jsonLd={[faqPage(provider.faq), breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb={provider.name} path={path} title={`Back up WordPress to ${provider.name}`} trail={[{ name: 'S3 & R2', href: '/s3-r2/' }]}>
     <p>OpenVault Backup can send backups to your own {provider.name} bucket, through the same S3-compatible signer it uses for every provider.</p>
-    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: available in 0.2.0, but not tested live against {provider.name}.</span></p>
+    <p class="status-line"><StatusBadge status={status} /> <span class="small">Pre-alpha: available since 0.2.0, but not tested live against {provider.name}.</span></p>
+    <div slot="visual" aria-hidden="true"><Buckets /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <div class="warn-box" role="note">
-        <h2>Available in 0.2.0 (pre-alpha), untested against {provider.name}</h2>
-        <p>The plugin can send backups to an S3-compatible bucket. It was tested live against one S3-compatible server (SeaweedFS). {provider.name} is covered by unit tests and the endpoint pattern in its own documentation, not by real calls, so please report problems. It cannot restore a backup, run schedules or delete old backups yet. Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
+      <div class="warn-box" role="note" data-reveal>
+        <h2>Available since 0.2.0 (pre-alpha), untested against {provider.name}</h2>
+        <p>The plugin can send backups to an S3-compatible bucket. It was tested live against one S3-compatible server (SeaweedFS). {provider.name} is covered by unit tests and the endpoint pattern in its own documentation, not by real calls, so please report problems. It cannot run schedules or delete old backups yet. Do not rely on it as your only backup, and do not delete any other backup because of it.</p>
       </div>
 
       <div class="two">
         <div class="stack">
-          <h2 class="sec-title">Endpoint and region</h2>
+          <p class="eyebrow" data-reveal>Endpoint</p>
+          <h2 class="sec-title" data-reveal>Endpoint and region</h2>
           <p class="muted">{provider.regionNote}</p>
         </div>
         <div class="stack">
-          <span class="label small muted">Endpoint pattern</span>
-          <p class="ep"><code>{provider.endpointPattern}</code></p>
+          <div class="term" data-reveal>
+            <div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span>Endpoint pattern</span></div>
+            <pre><code>{provider.endpointPattern}</code></pre>
+          </div>
           <p class="small muted">Replace the placeholders in angle brackets with your own values. Check the provider documentation for the exact current format.</p>
           <p><a class="btn btn--secondary" href={provider.docsUrl} rel="noopener">Provider documentation</a></p>
         </div>
       </div>
 
       <div class="stack">
-        <h2 class="sec-title">What is specific to {provider.shortName}</h2>
-        <ul role="list" class="points">
-          {provider.distinct.map((d) => <li>{d}</li>)}
+        <h2 class="sec-title" data-reveal>What is specific to {provider.shortName}</h2>
+        <ul role="list" class="points checks" data-reveal="stagger">
+          {provider.distinct.map((d) => <li><Icon name="check" size={20} /><span class="muted">{d}</span></li>)}
         </ul>
       </div>
     </div>
@@ -69,14 +75,15 @@ const others = providers.filter((p) => p.slug !== provider.slug);
   <section class="section section--surface">
     <div class="container two">
       <div class="stack">
-        <h2 class="sec-title">What you will need</h2>
-        <ul role="list" class="need">
-          {provider.needs.map((n) => <li>{n}</li>)}
+        <p class="eyebrow" data-reveal>Checklist</p>
+        <h2 class="sec-title" data-reveal>What you will need</h2>
+        <ul role="list" class="need checks" data-reveal="stagger">
+          {provider.needs.map((n) => <li><Icon name="check" size={20} /><span>{n}</span></li>)}
         </ul>
         <p class="small muted">In the plugin: a private bucket, an optional folder prefix, and a Test connection button. Give the key only list, put, get and delete on that one bucket.</p>
       </div>
       <div class="stack-lg">
-        <h2 class="sec-title">Questions</h2>
+        <h2 class="sec-title" data-reveal>Questions</h2>
         {provider.faq.map((f) => (
           <div class="qa">
             <h3>{f.q}</h3>
@@ -91,19 +98,19 @@ const others = providers.filter((p) => p.slug !== provider.slug);
   {Content && (
     <section class="section" id="setup-outline">
       <div class="container stack-lg">
-        <h2 class="sec-title">Setup outline</h2>
-        <OutlineNotice status={status} message="This guide is still a short outline, without screenshots. The Destinations page in the plugin (0.2.0, pre-alpha) already lets you follow these steps, but only SeaweedFS has been tested against a real server, so details for your provider may differ. Please report problems." />
-        <GuideProse><Content /></GuideProse>
+        <h2 class="sec-title" data-reveal>Setup outline</h2>
+        <OutlineNotice status={status} message="This guide is still a short outline, without screenshots. The Destinations page in the plugin (pre-alpha) already lets you follow these steps, but only SeaweedFS has been tested against a real server, so details for your provider may differ. Please report problems." />
+        <div data-reveal><GuideProse><Content /></GuideProse></div>
       </div>
     </section>
   )}
 
   <section class="section">
     <div class="container stack-lg">
-      <h2 class="sec-title">Other providers</h2>
-      <nav class="pn" aria-label="Other providers">
-        <a class="btn btn--secondary" href={`/s3-r2/${prev.slug}/`}>Previous: {prev.name}</a>
-        <a class="btn btn--secondary" href={`/s3-r2/${next.slug}/`}>Next: {next.name}</a>
+      <h2 class="sec-title" data-reveal>Other providers</h2>
+      <nav class="pn" aria-label="Other providers" data-reveal>
+        <a class="pn-link" href={`/s3-r2/${prev.slug}/`} data-cursor="Prev"><span class="mono">Previous</span><span class="pn-name">&larr; {prev.name}</span></a>
+        <a class="pn-link pn-next" href={`/s3-r2/${next.slug}/`} data-cursor="Next"><span class="mono">Next</span><span class="pn-name">{next.name} &rarr;</span></a>
       </nav>
       <ul role="list" class="cluster others">
         {others.map((o) => <li><a class="link" href={`/s3-r2/${o.slug}/`}>{o.name}</a></li>)}
@@ -114,17 +121,18 @@ const others = providers.filter((p) => p.slug !== provider.slug);
 </Base>
 
 <style>
-  .status-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); margin-top: var(--space-4); }
   .two { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
-  .ep code { display: inline-block; max-width: 100%; overflow-wrap: anywhere; font-size: var(--step-0); }
-  .points { padding: 0; display: grid; border-top: 1px solid var(--line-strong); max-width: var(--measure); }
-  .points li { padding-block: var(--space-4); border-bottom: 1px solid var(--line); color: var(--muted); overflow-wrap: anywhere; }
-  .need { padding: 0; display: grid; border-top: 1px solid var(--line-strong); }
-  .need li { padding-block: var(--space-4); border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+  .points, .need { overflow-wrap: anywhere; }
+  .points { max-width: var(--measure); }
   .qa { display: grid; grid-template-columns: minmax(0, 1fr); overflow-wrap: anywhere; gap: var(--space-2); padding-top: var(--space-4); border-top: 1px solid var(--line-strong); }
-  .qa h3 { font-size: var(--step-1); line-height: 1.25; }
-  .pn { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-  .pn .btn { flex: 1 1 14rem; max-width: 22rem; }
+  .qa h3 { font-size: var(--step-2); }
+  .pn { display: grid; border-block: 1px solid var(--line-strong); }
+  .pn-link { display: grid; gap: var(--space-2); padding: var(--space-6) 0; text-decoration: none; background: none; transition: color 0.3s; }
+  .pn-link .mono { color: var(--muted); }
+  .pn-name { font-family: var(--font-display); font-size: clamp(2rem, 1rem + 4vw, 4.5rem); line-height: 1; letter-spacing: -0.02em; }
+  .pn-link:hover, .pn-link:focus-visible { color: var(--accent); }
+  .pn-link + .pn-link { border-top: 1px solid var(--line); }
+  @media (min-width: 48rem) { .pn { grid-template-columns: 1fr 1fr; } .pn-link + .pn-link { border-top: 0; border-left: 1px solid var(--line); padding-left: var(--space-6); } .pn-next { text-align: right; padding-right: 0; justify-items: end; } .pn-next { padding-left: var(--space-6); } }
   .others { padding: 0; }
   @media (min-width: 60rem) {
     .two { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }

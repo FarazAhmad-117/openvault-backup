@@ -132,7 +132,10 @@ class BackupsListTable extends \WP_List_Table {
 		if ( BackupRowPresenter::has_files( $status ) ) {
 			$actions['download'] = '<a href="#ovb-dl-' . $id . '" data-ovb-action="downloads" data-ovb-id="' . $id . '" aria-controls="ovb-dl-' . $id . '">' . esc_html__( 'Download', 'openvault-backup' ) . '</a>';
 			$list                = $this->download_list( $id );
-			$actions['lock']     = '<a href="#" role="button" data-ovb-action="lock" data-ovb-locked="' . ( $item['locked'] ? '0' : '1' ) . '" data-ovb-id="' . $id . '">' . esc_html( $item['locked'] ? __( 'Unlock', 'openvault-backup' ) : __( 'Lock', 'openvault-backup' ) ) . '</a>';
+			if ( BackupRowPresenter::can_restore( $status, ! empty( $item['encrypted'] ) ) ) {
+				$actions['restore'] = '<a href="' . esc_url( Menu::url( 'openvault-restore', array( 'backup' => (string) $id ) ) ) . '">' . esc_html__( 'Restore', 'openvault-backup' ) . '</a>';
+			}
+			$actions['lock'] = '<a href="#" role="button" data-ovb-action="lock" data-ovb-locked="' . ( $item['locked'] ? '0' : '1' ) . '" data-ovb-id="' . $id . '">' . esc_html( $item['locked'] ? __( 'Unlock', 'openvault-backup' ) : __( 'Lock', 'openvault-backup' ) ) . '</a>';
 		}
 		if ( BackupRowPresenter::is_running( $status ) ) {
 			$actions['progress'] = '<a href="' . esc_url( \OpenVault\Backup\Admin\Menu::url( 'openvault-backup-now' ) ) . '">' . esc_html__( 'View progress', 'openvault-backup' ) . '</a>';

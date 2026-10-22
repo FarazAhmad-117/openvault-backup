@@ -66,8 +66,22 @@ class InstallerTest extends TestCase {
 
 	public function test_table_names_cover_the_planned_schema() {
 		$this->assertSame(
-			array( 'backups', 'backup_files', 'destinations', 'schedules', 'logs' ),
+			array( 'backups', 'backup_files', 'destinations', 'schedules', 'logs', 'restores' ),
 			Installer::table_names()
 		);
+	}
+	public function test_schema_two_adds_the_restores_table() {
+		$this->assertSame(
+			array(
+				'1' => 'migrate_1',
+				'2' => 'migrate_2',
+			),
+			Installer::migrations()
+		);
+		$this->assertSame( array( 'migrate_2' ), array_values( Installer::pending( '1', Installer::migrations() ) ) );
+		$this->assertSame( array( 'migrate_1', 'migrate_2' ), array_values( Installer::pending( '0', Installer::migrations() ) ) );
+		$this->assertSame( array(), Installer::pending( '2', Installer::migrations() ) );
+		$this->assertSame( '2', OVB_DB_VERSION );
+		$this->assertContains( 'restores', Installer::table_names() );
 	}
 }

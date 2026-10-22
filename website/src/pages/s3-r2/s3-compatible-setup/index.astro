@@ -4,6 +4,7 @@ import Base from '../../../layouts/Base.astro';
 import PageHead from '../../../components/PageHead.astro';
 import OutlineNotice from '../../../components/OutlineNotice.astro';
 import GuideProse from '../../../components/GuideProse.astro';
+import Buckets from '../../../components/art/Buckets.astro';
 import { siteUrl } from '../../../config/site';
 import { statusOf } from '../../../lib/registry';
 import { breadcrumbs } from '../../../lib/jsonld';
@@ -24,28 +25,29 @@ const Content = entry ? (await render(entry)).Content : null;
 <Base title="S3-compatible setup guide" description={description} path={path} jsonLd={[breadcrumbs(siteUrl(), trail)]}>
   <PageHead crumb="Generic setup" path={path} title="S3-compatible setup guide" trail={[{ name: 'S3 & R2', href: '/s3-r2/' }]}>
     <p>The fields and steps shared by every S3-compatible provider, including a custom endpoint.</p>
+    <div slot="visual" aria-hidden="true"><Buckets /></div>
   </PageHead>
 
   <section class="section">
     <div class="container stack-lg">
-      <OutlineNotice status={status} message="This guide is still a short outline, without screenshots. The Destinations page in the plugin (0.2.0, pre-alpha) already lets you follow these steps, but only SeaweedFS has been tested against a real server, so details for your provider may differ. Please report problems." />
+      <OutlineNotice status={status} message="This guide is still a short outline, without screenshots. The Destinations page in the plugin (pre-alpha) already lets you follow these steps, but only SeaweedFS has been tested against a real server, so details for your provider may differ. Please report problems." />
 
       {Content ? (
-        <GuideProse><Content /></GuideProse>
+        <div data-reveal><GuideProse><Content /></GuideProse></div>
       ) : (
         <p class="muted">The outline for this guide could not be loaded.</p>
       )}
 
       <div class="stack">
-        <h2 class="sec-title">Provider-specific notes</h2>
+        <h2 class="sec-title" data-reveal>Provider-specific notes</h2>
         <ul role="list" class="cluster provs">
           {providers.map((p) => <li><a class="link" href={`/s3-r2/${p.slug}/`}>{p.name}</a></li>)}
         </ul>
       </div>
 
-      <nav class="pn" aria-label="Guide navigation">
-        <a class="btn btn--secondary" href="/s3-r2/">Previous: S3 and R2 overview</a>
-        <a class="btn btn--secondary" href="/docs/">Next: All guides</a>
+      <nav class="pn" aria-label="Guide navigation" data-reveal>
+        <a class="pn-link" href="/s3-r2/" data-cursor="Prev"><span class="mono">Previous</span><span class="pn-name">&larr; S3 and R2 overview</span></a>
+        <a class="pn-link pn-next" href="/docs/" data-cursor="Next"><span class="mono">Next</span><span class="pn-name">All guides &rarr;</span></a>
       </nav>
     </div>
   </section>
@@ -53,6 +55,11 @@ const Content = entry ? (await render(entry)).Content : null;
 
 <style>
   .provs { padding: 0; }
-  .pn { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-  .pn .btn { flex: 1 1 14rem; max-width: 22rem; }
+  .pn { display: grid; border-block: 1px solid var(--line-strong); }
+  .pn-link { display: grid; gap: var(--space-2); padding: var(--space-6) 0; text-decoration: none; background: none; transition: color 0.3s; }
+  .pn-link .mono { color: var(--muted); }
+  .pn-name { font-family: var(--font-display); font-size: clamp(2rem, 1rem + 4vw, 4.5rem); line-height: 1; letter-spacing: -0.02em; }
+  .pn-link:hover, .pn-link:focus-visible { color: var(--accent); }
+  .pn-link + .pn-link { border-top: 1px solid var(--line); }
+  @media (min-width: 48rem) { .pn { grid-template-columns: 1fr 1fr; } .pn-link + .pn-link { border-top: 0; border-left: 1px solid var(--line); padding-left: var(--space-6); } .pn-next { text-align: right; justify-items: end; padding-right: 0; } }
 </style>
